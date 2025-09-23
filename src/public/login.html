@@ -8,15 +8,24 @@
 <body>
   <div class="container">
     <h2>Login</h2>
-    <form>
-      <input type="email" placeholder="Email" required>
-      <input type="password" placeholder="Password" required>
+
+    <div id="message"></div>
+
+    <form class="login-form">
+      <input type="email" id="email" placeholder="Email" required>
+      <input type="password" id="password" placeholder="Password" required>
+       <div class="forgot-password">
+        <a href="forgotPassword.html">Forgot Password?</a>
+      </div>
       
       <button type="submit">Login</button>
     </form>
+
     <div class="link">
       Don’t have an account? <a href="signup.html">Sign up</a>
     </div>
   </div>
+
+  <script src="login.js"></script>
 </body>
 </html>
