@@ -13,6 +13,12 @@ const patientSchema = new mongoose.Schema({
             uploadedAt: { type: Date, default: Date.now },
             fileType: String
         }]
-    }
+    },
+     resetPasswordToken: {
+        type:String
+    },
+    resetPasswordExpire: {
+        type:Date
+    },
 })
 module.exports = mongoose.model("Patient", patientSchema);

@@ -5,6 +5,12 @@ const docSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: { type: String, default: "doctor", required: true },
     gender: { type: String, enum: ["Male", "Female", "Other"] },
-    doctorInfo: { specialization: { type: String }, Contact: { type: String } }
+    doctorInfo: { specialization: { type: String }, Contact: { type: String } },
+     resetPasswordToken: {
+        type:String
+    },
+    resetPasswordExpire: {
+        type:Date
+    },
 })
 module.exports = mongoose.model("Doctor", docSchema);
