@@ -30,7 +30,7 @@ form.addEventListener("submit", async (e) => {
         messageDiv.className = "error"; 
         return;
     }
-    const result = await loginUser(email, password, "http://localhost:3333/HealRec/login");
+    const result = await loginUser(email, password, "http://localhost:3333/HealRec/users/login");
     if (result && result.success === true) {
         messageDiv.textContent = "Login successful! Redirecting...";
         messageDiv.className = "success"; 

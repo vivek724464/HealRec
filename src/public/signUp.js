@@ -35,7 +35,7 @@ form.addEventListener("submit", async (e) => {
         email,
         password,
         role,
-        "http://localhost:3333/HealRec/signup"
+        "http://localhost:3333/HealRec/users/signup"
     );
     if (result && result.success === true) {
         messageDiv.textContent = "Account created successfully! Redirecting to login...";
