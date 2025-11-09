@@ -1,24 +1,29 @@
 const mongoose = require("mongoose");
-const patientSchema = new mongoose.Schema({
+
+const reportSchema = new mongoose.Schema({
+  fileName: { type: String, required: true },
+  url: { type: String, required: true }, 
+  fileType: { type: String, required: true }, 
+  uploadedAt: { type: Date, default: Date.now },
+});
+
+const patientSchema = new mongoose.Schema(
+  {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { type: String, default: "patient", required: true },
+    role: { type: String, default: "patient" },
     patientInfo: {
-        age: Number,
-        gender: { type: String, enum: ["Male", "Female", "Other"] },
-        contact: { type: String }, bloodGroup: { type: String },
-        medicalReports: [{
-            fileName: String, filePath: String,
-            uploadedAt: { type: Date, default: Date.now },
-            fileType: String
-        }]
+      age: { type: Number },
+      gender: { type: String, enum: ["Male", "Female", "Other"] },
+      contact: { type: String },
+      bloodGroup: { type: String },
     },
-     resetPasswordToken: {
-        type:String
-    },
-    resetPasswordExpire: {
-        type:Date
-    },
-})
+    reports: [reportSchema],
+    resetPasswordToken: { type: String },
+    resetPasswordExpire: { type: Date },
+  },
+  { timestamps: true }
+);
+
 module.exports = mongoose.model("Patient", patientSchema);
