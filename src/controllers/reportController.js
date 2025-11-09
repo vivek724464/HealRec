@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Patient = require("../models/patientSchema");
 
-exports.uploadReport = async (req, res) => {
+const uploadReport = async (req, res) => {
   try {
     const { patientId } = req.body;
 
@@ -22,13 +22,20 @@ exports.uploadReport = async (req, res) => {
     const fileName = req.file.originalname || req.file.filename;
     const fileType = req.file.mimetype || "application/octet-stream";
 
-    const filePath = req.file?.path || req.file?.secure_url || req.file?.url;
+    let filePath = req.file?.path || req.file?.secure_url || req.file?.url;
 
     if (!filePath) {
       return res.json({
         success: false,
         message: "Uploaded file URL not found"
       });
+    }
+     const format =
+      req.file?.format ||
+      fileType.split("/")[1] ||
+      fileName.split(".").pop();
+    if (!filePath.endsWith(`.${format}`)) {
+      filePath += `.${format}`;
     }
 
     const patient = await Patient.findById(patientId);
@@ -52,8 +59,6 @@ exports.uploadReport = async (req, res) => {
 
     await patient.save({ validateBeforeSave: false });
 
-    console.log("Report saved for patient:", patient._id);
-
     res.json({
       success: true,
       message: "Report uploaded and saved successfully",
@@ -69,7 +74,7 @@ exports.uploadReport = async (req, res) => {
   }
 };
 
-exports.getReports = async (req, res) => {
+const getReports = async (req, res) => {
   try {
     const { patientId } = req.params;
 
@@ -102,3 +107,5 @@ exports.getReports = async (req, res) => {
     });
   }
 };
+
+module.exports = {uploadReport, getReports};
