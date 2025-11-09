@@ -7,34 +7,36 @@ exports.uploadReport = async (req, res) => {
 
     if (!req.file) {
       return res.json({
-        success:false,
-        message:"No file uploaded"
+        success: false,
+        message: "No file uploaded"
       });
     }
 
     if (!patientId) {
-      return res.json({ 
-        success:false,
-        message: "patientId is required in body" 
+      return res.json({
+        success: false,
+        message: "patientId is required in body"
       });
     }
 
     const fileName = req.file.originalname || req.file.filename;
     const fileType = req.file.mimetype || "application/octet-stream";
-    const filePath = req.file.path || req.file.url; 
+    
+    // ✅ FIXED: Safe fallback for all Cloudinary or local upload types
+    const filePath = req.file?.path || req.file?.secure_url || req.file?.url;
 
     if (!filePath) {
       return res.json({
-        success:false,
-        message: "Uploaded file URL not found" 
+        success: false,
+        message: "Uploaded file URL not found"
       });
     }
 
     const patient = await Patient.findById(patientId);
     if (!patient) {
       return res.json({
-        success:false,
-        message: "Patient not found" 
+        success: false,
+        message: "Patient not found"
       });
     }
 
@@ -54,16 +56,16 @@ exports.uploadReport = async (req, res) => {
     console.log("Report saved for patient:", patient._id);
 
     res.json({
-      success:true,
+      success: true,
       message: "Report uploaded and saved successfully",
       report: reportData,
     });
   } catch (error) {
     console.error("Error in uploadReport:", error);
-    res.json({ 
-      success:false,
-      message: "Error uploading report", 
-      error: error.message || error 
+    res.json({
+      success: false,
+      message: "Error uploading report",
+      error: error.message || error
     });
   }
 };
@@ -73,9 +75,10 @@ exports.getReports = async (req, res) => {
     const { patientId } = req.params;
 
     if (!patientId) {
-      return res.json({ 
-        success:false,
-        message: "patientId param required" });
+      return res.json({
+        success: false,
+        message: "patientId param required"
+      });
     }
 
     const cleanId = patientId.trim();
@@ -83,17 +86,18 @@ exports.getReports = async (req, res) => {
 
     if (!patient) {
       return res.json({
-        success:false, 
-        message: "Patient not found" });
+        success: false,
+        message: "Patient not found"
+      });
     }
 
     res.json({
-      reports: patient.patientInfo.medicalReports || [],
+      reports: patient.reports || [],
     });
   } catch (error) {
     console.error("Error in getReports:", error);
     res.json({
-      success:false,
+      success: false,
       message: "Error fetching reports",
       error: error.message || error,
     });
