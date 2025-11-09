@@ -21,7 +21,7 @@ exports.uploadReport = async (req, res) => {
 
     const fileName = req.file.originalname || req.file.filename;
     const fileType = req.file.mimetype || "application/octet-stream";
-    
+
     const filePath = req.file?.path || req.file?.secure_url || req.file?.url;
 
     if (!filePath) {
