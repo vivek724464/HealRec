@@ -7,9 +7,6 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
 
-console.log("PORT:", process.env.PORT);
-console.log("MONGO_URI:", process.env.MONGO_URI);
-
 connectDB();
 
 app.use(express.json());
