@@ -32,7 +32,6 @@ const register = async (req, res) => {
             success: true,
             message: "Registered Successfully"
         })
-
     } catch (error) {
         res.json({
             success: false,
@@ -52,7 +51,6 @@ const login = async (req, res) => {
             })
         }
         let existingUser = await Doctor.findOne({ email }) || await Patient.findOne({ email });
-
         if (!existingUser) {
             return res.json({
                 success: false,
@@ -67,14 +65,11 @@ const login = async (req, res) => {
             });
         }
         const token = generateToken(existingUser);
-
-
         return res.json({
             success: true,
             message: "Login successful",
             token: token
         });
-
     } catch (error) {
         res.json({
             success: false,
@@ -82,7 +77,6 @@ const login = async (req, res) => {
         });
     }
 };
-
 const forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
@@ -98,8 +92,6 @@ const forgotPassword = async (req, res) => {
         existingUser.resetPasswordToken = hashedToken;
         existingUser.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
         await existingUser.save();
-
-
         const resetUrl = `http://localhost:${process.env.PORT}/HealRec/reset-password/${resetToken}`;
         await sendMail(
             email,
@@ -117,13 +109,11 @@ const forgotPassword = async (req, res) => {
         })
     }
 }
-
-const resetPassword = async (req, res) => {
+const resetPassword = async (req, res) => { 
     try {
         const { token } = req.params;
         const { password } = req.body;
         const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
-
         const user = await Doctor.findOne({
             resetPasswordToken: hashedToken,
             resetPasswordExpire: { $gt: Date.now() },
@@ -131,21 +121,16 @@ const resetPassword = async (req, res) => {
             resetPasswordToken: hashedToken,
             resetPasswordExpire: { $gt: Date.now() },
         })
-       
-
         if (!user) {
             return res.json({
                 success: false,
                 message: "Invalid or expired token"
             });
         }
-
-
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(password, salt);
         user.resetPasswordToken = undefined;
         user.resetPasswordExpire = undefined;
-
         await user.save();
         await sendMail(
             user.email,
@@ -156,9 +141,6 @@ const resetPassword = async (req, res) => {
              success: true,
               message: "Password reset successful" 
             });
-
-
-
     } catch (error) {
         return res.status(500).json({
             success: false,
@@ -166,8 +148,4 @@ const resetPassword = async (req, res) => {
         })
     }
 }
-
-
-
 module.exports = { register, login, forgotPassword, resetPassword }
-
