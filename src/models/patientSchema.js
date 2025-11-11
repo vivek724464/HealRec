@@ -15,6 +15,18 @@ const patientSchema = new mongoose.Schema(
       bloodGroup: { type: String },
     },
     reports: [reportSchema],
+followingDoctors: [
+  {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Doctor",
+  },
+],
+pendingRequests: [
+  {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Doctor",
+  },
+],
     resetPasswordToken: { type: String },
     resetPasswordExpire: { type: Date },
   },
