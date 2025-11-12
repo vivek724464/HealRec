@@ -242,3 +242,62 @@ const declineFollowRequest = async (req, res) => {
 
     }
 }
+
+const getPendingFollowRequests = async (req, res) => {
+  try {
+    const doctorId = req.user.id;
+    const doctor = await Doctor.findById(doctorId).populate("followRequests.patient", "name email");
+
+    const pending = doctor.followRequests.filter(r => r.status === "pending");
+
+    return res.json({
+      success: true,
+      pendingRequests: pending
+    });
+  } catch (error) {
+    return res.json({ 
+	success: false,
+	message: error.message
+ });
+  }
+};
+
+
+const getDoctorFollowers = async (req, res) => {
+  try {
+    const doctorId = req.user.id;
+    const doctor = await Doctor.findById(doctorId).populate("followRequests.patient", "name email patientInfo");
+
+    const accepted = doctor.followRequests.filter(r => r.status === "accepted");
+
+    return res.json({
+      success: true,
+      followers: accepted
+    });
+  } catch (error) {
+    return res.json({
+	 success: false,
+	 message: error.message
+	 });
+  }
+};
+
+const getFollowingDoctors = async (req, res) => {
+  try {
+    const patientId = req.user.id;
+    const patient = await Patient.findById(patientId).populate("followingDoctors.doctor", "name email doctorInfo");
+
+    const accepted = patient.followingDoctors.filter(f => f.status === "accepted");
+
+    return res.json({
+      success: true,
+      following: accepted
+    });
+  } catch (error) {
+    return res.json({ 
+	success: false,
+	message: error.message });
+  }
+};
+
+module.exports = {sendFolloRequest, sendUnfollowRequest, acceptFollowRequest, declineFollowRequest, getPendingFollowRequests, getDoctorFollowers, getFollowingDoctors};
