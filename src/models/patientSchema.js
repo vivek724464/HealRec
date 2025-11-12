@@ -15,22 +15,21 @@ const patientSchema = new mongoose.Schema(
       bloodGroup: { type: String },
     },
     reports: [reportSchema],
-followingDoctors: [
-  {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Doctor",
+      followingDoctors: [
+    {
+      doctor: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor" },
+      status: {
+        type: String,
+        enum: ["pending", "accepted", "declined"],
+        default: "pending",
+      },
+      createdAt: { type: Date, default: Date.now },
+    },
+  ],
+  resetPasswordToken: { type: String },
+  resetPasswordExpire: { type: Date },
   },
-],
-pendingRequests: [
-  {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Doctor",
-  },
-],
-    resetPasswordToken: { type: String },
-    resetPasswordExpire: { type: Date },
-  },
-  { timestamps: true }
-);
+{ timestamps: true });
+
 
 module.exports = mongoose.model("Patient", patientSchema);
