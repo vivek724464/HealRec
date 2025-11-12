@@ -15,9 +15,11 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const userRouter = require("./routes/userRoutes");
 const reportRouter = require("./routes/reportRoutes");
+const followRouter=require("./routes/followRoutes");
 
 app.use("/HealRec/users", userRouter);
 app.use("/HealRec/reports", reportRouter);
+app.use("/HealRec/followers", followRouter);
 
 app.get("/", (req, res) => {
   res.send("Welcome to HealRec API");

@@ -1,5 +1,5 @@
-const Doctor = require("../models/Doctor");
-const Patient = require("../models/Patient");
+const Doctor = require("../models/docSchema");
+const Patient = require("../models/patientSchema");
 const { verifyToken } = require("../utils/jwt");
 
 
@@ -51,3 +51,5 @@ const isPatient = (req, res, next) => {
     }
     next();
 };
+
+module.exports={isLoggedIn, isPatient, isDoctor};
