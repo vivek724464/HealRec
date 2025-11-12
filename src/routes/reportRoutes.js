@@ -18,7 +18,6 @@ const storage = new CloudinaryStorage({
     };
   },
 });
-
 const upload = multer({ storage });
 
 router.post("/uploadReport", upload.single("report"), uploadReport);

@@ -20,30 +20,26 @@ const sendFolloRequest = async (req, res) => {
                 message: "Doctor or Patient not found"
             })
         }
-        if (doctor.followRequests.includes(patientId)) {
+        const existingRequest = doctor.followRequests.find((r) =>
+            r.patient.toString() === patientId
+        )
+        if (existingRequest) {
             return res.json({
                 success: false,
-                message: "Follow request already sent"
+                message: "Request already sent"
             })
         }
-        if (patient.followingDoctors.includes(doctorId)) {
-            return res.json({
-                success: false,
-                message: "Already following this doctor"
-            })
-        }
-        doctor.followRequests.push(patientId);
-        patient.pendingRequests.push(doctorId);
+        doctor.followRequests.push({ patient: patientId, status: "pending" });
+        patient.followingDoctors.push({ doctor: doctorId, status: "pending" });
+
 
         await doctor.save();
         await patient.save();
 
         return res.json({
             success: true,
-            message: "Follow request sent ti doctor"
+            message: "Follow request sent"
         })
-
-
     } catch (error) {
         res.json({
             success: false,
@@ -71,35 +67,178 @@ const sendUnfollowRequest = async (req, res) => {
             });
         }
 
-        let isFollwing=doctor.followers.includes(patientId);
-        let hasRequested=doctor.followRequests.includes(patientId);
-
-        if(!isFollwing && !hasRequested){
+        const followEntry = patient.followingDoctors.find((f) => f.doctor.toString() === doctorId.toString());
+        if (!followEntry) {
             return res.json({
-                success:false,
-                message:"You are not following or haven't requested to follow this doctor"
+                success: false,
+                message: "You are not following or haven't requested to follow this doctor"
+            })
+        }
+        const doesDochaveReq = doctor.followRequests.find((r) => r.doctor.toString() === doctorId.toString());
+        if (!doesDochaveReq) {
+            return res.json({
+                success: false,
+                message: "Follow request not found in doctor's record"
+            })
+        }
+        if (doesDochaveReq.status === "pending") {
+            doctor.followRequests = doctor.followRequests.filter((f) => f.patient.toString() !== patientId.toString());
+            patient.followingDoctors = patient.followingDoctors.filter((r) => r.doctor.toString() !== doctorId.toString());
+
+            await doctor.save();
+            await patient.save();
+            return res.json({
+                success: true,
+                message: "Follow request canceled successfully"
             })
         }
 
-        if(isFollwing){
-             doctor.followers = doctor.followers.filter((id) => id.toString() !== patientId.toString());
-                patient.followingDoctors = patient.followingDoctors.filter((id) => id.toString() !== doctorId.toString());
-        }
-        if(hasRequested){
-               doctor.followRequests = doctor.followRequests.filter((id) => id.toString() !== patientId.toString());
-                patient.pendingRequests = patient.pendingRequests.filter((id) => id.toString() !== doctorId.toString());
-        }
-        await doctor.save();
-        await patient.save();
+        if (doesDochaveReq.status === "accepted") {
+            doctor.followRequests = doctor.followRequests.filter((f) => f.patient.toString() !== patientId.toString());
+            patient.followingDoctors = patient.followingDoctors.filter((r) => r.doctor.toString() !== doctorId.toString());
 
-        return res.json({
-            success:true,
-            message:"Unfollowed doctor successfully"
+            await doctor.save();
+            await patient.save();
+            return res.json({
+                success: true,
+                message: "Doctor unfollwed successfully"
+            })
+        }
+        return re.json({
+            success: false,
+            message: "Cannot unfollow. Follow request already declined.",
         })
     } catch (error) {
         return res.json({
             success: false,
             message: error.message
         })
+    }
+}
+
+const acceptFollowRequest = async (req, res) => {
+    try {
+        const doctorId = req.user.id;
+        const { patientId } = req.body;
+        if (!patientId) {
+            return res.json({
+                success: false,
+                message: "patientId is required"
+            })
+        }
+
+        let patient = await Patient.findById(patientId);
+        let doctor = await Doctor.findById(doctorId);
+
+        if (!doctor || !patient) {
+            return res.json({
+                success: false,
+                message: "Doctor or Patient not found"
+            })
+        }
+        const request = doctor.followRequests.find((r) => r.patient.toString() === patientId.toString());
+        if (!request) {
+            return res.json({
+                success: fasle,
+                message: "No follow request found from this patient"
+            });
+        }
+        if (request.status === "accepted") {
+            return res.json({
+                success: false,
+                message: "Follow request already accepted"
+            })
+        }
+        if (request.status === "declined") {
+            return res.json({
+                success: false,
+                message: "Follow request already declined"
+            });
+        }
+        request.status = "accepted";
+        const patientFollow = patient.followingDoctors.find(
+            (f) => f.doctor.toString() === doctorId.toString()
+        );
+
+        if (patientFollow) {
+            patientFollow.status = "accepted";
+        } else {
+            patient.followingDoctors.push({
+                doctor: doctorId,
+                status: "accepted",
+            });
+        }
+        await doctor.save();
+        await patient.save();
+
+        return res.json({
+            success: true,
+            message: "Follow request accepted successfully",
+        });
+
+    } catch (error) {
+        return res.json({
+            success: false,
+            message: error.message
+        })
+    }
+
+}
+
+const declineFollowRequest = async (req, res) => {
+    try {
+        const doctorId = req.user.id;
+        const { patientId } = req.body;
+        if (!patientId) {
+            return res.json({
+                success: false,
+                message: "patientId is required"
+            })
+        }
+        const doctor = await Doctor.findById(doctorId);
+        const patient = await Patient.findById(patientId);
+        if (!patient || !doctor) {
+            return res.json({
+                success: false,
+                message: "Patient or Doctor not found"
+            })
+        }
+        const request = doctor.followRequests.find((r) => r.patientId.toString() === patientId.toString());
+        if (!request) {
+            return res.json({
+                success: false,
+                message: "No follow request found from this patient"
+            })
+        }
+        if (request.status == "accepted") {
+            return res.json({
+                success: false,
+                message: "Request already accepted"
+            })
+        }
+        if (request.status == "declined") {
+            return res.json({
+                success: false,
+                message: "Request already declined"
+            })
+        }
+
+        request.status = "declined";
+        const patientFollow = patient.followingDoctors.find((f) => f.doctor.toString() === doctorId.toString());
+        if (patientFollow) {
+            patientFollow.status = "declined";
+        }
+        await doctor.save();
+        await patient.save();
+        return res.json({
+            success: true,
+            message: "Request declined successfully"
+        })
+    } catch (error) {
+        return res.json({
+            success: false,
+            message: error.message
+        })
+
     }
 }
