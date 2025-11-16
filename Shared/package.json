@@ -1,0 +1,21 @@
+{
+  "name": "shared",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "amqplib": "^0.10.9",
+    "buffer-more-ints": "^1.0.0",
+    "dotenv": "^17.2.3",
+    "querystringify": "^2.2.0",
+    "requires-port": "^1.0.0",
+    "url-parse": "^1.5.10"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
