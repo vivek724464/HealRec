@@ -1,5 +1,6 @@
 const Doctor = require("../models/docSchema");
 const Patient = require("../models/patientSchema");
+const{publishFollowAccepted, publishFollowRevoked,}= require("../config/rabbitUtil");
 
 const sendFolloRequest = async (req, res) => {
     try {
@@ -170,7 +171,7 @@ const acceptFollowRequest = async (req, res) => {
         }
         await doctor.save();
         await patient.save();
-
+        await publishFollowAccepted(doctorId, patientId);
         return res.json({
             success: true,
             message: "Follow request accepted successfully",
@@ -230,6 +231,7 @@ const declineFollowRequest = async (req, res) => {
         }
         await doctor.save();
         await patient.save();
+        await publishFollowRevoked(doctorId, patientId);
         return res.json({
             success: true,
             message: "Request declined successfully"
@@ -244,60 +246,61 @@ const declineFollowRequest = async (req, res) => {
 }
 
 const getPendingFollowRequests = async (req, res) => {
-  try {
-    const doctorId = req.user.id;
-    const doctor = await Doctor.findById(doctorId).populate("followRequests.patient", "name email");
+    try {
+        const doctorId = req.user.id;
+        const doctor = await Doctor.findById(doctorId).populate("followRequests.patient", "name email");
 
-    const pending = doctor.followRequests.filter(r => r.status === "pending");
+        const pending = doctor.followRequests.filter(r => r.status === "pending");
 
-    return res.json({
-      success: true,
-      pendingRequests: pending
-    });
-  } catch (error) {
-    return res.json({ 
-	success: false,
-	message: error.message
- });
-  }
+        return res.json({
+            success: true,
+            pendingRequests: pending
+        });
+    } catch (error) {
+        return res.json({
+            success: false,
+            message: error.message
+        });
+    }
 };
 
 
 const getDoctorFollowers = async (req, res) => {
-  try {
-    const doctorId = req.user.id;
-    const doctor = await Doctor.findById(doctorId).populate("followRequests.patient", "name email patientInfo");
+    try {
+        const doctorId = req.user.id;
+        const doctor = await Doctor.findById(doctorId).populate("followRequests.patient", "name email patientInfo");
 
-    const accepted = doctor.followRequests.filter(r => r.status === "accepted");
+        const accepted = doctor.followRequests.filter(r => r.status === "accepted");
 
-    return res.json({
-      success: true,
-      followers: accepted
-    });
-  } catch (error) {
-    return res.json({
-	 success: false,
-	 message: error.message
-	 });
-  }
+        return res.json({
+            success: true,
+            followers: accepted
+        });
+    } catch (error) {
+        return res.json({
+            success: false,
+            message: error.message
+        });
+    }
 };
 
 const getFollowingDoctors = async (req, res) => {
-  try {
-    const patientId = req.user.id;
-    const patient = await Patient.findById(patientId).populate("followingDoctors.doctor", "name email doctorInfo");
+    try {
+        const patientId = req.user.id;
+        const patient = await Patient.findById(patientId).populate("followingDoctors.doctor", "name email doctorInfo");
 
-    const accepted = patient.followingDoctors.filter(f => f.status === "accepted");
+        const accepted = patient.followingDoctors.filter(f => f.status === "accepted");
 
-    return res.json({
-      success: true,
-      following: accepted
-    });
-  } catch (error) {
-    return res.json({ 
-	success: false,
-	message: error.message });
-  }
+        return res.json({
+            success: true,
+            following: accepted
+        });
+    } catch (error) {
+        return res.json({
+            success: false,
+            message: error.message
+        });
+    }
 };
 
-module.exports = {sendFolloRequest, sendUnfollowRequest, acceptFollowRequest, declineFollowRequest, getPendingFollowRequests, getDoctorFollowers, getFollowingDoctors};
+module.exports = { sendFolloRequest, sendUnfollowRequest, acceptFollowRequest, declineFollowRequest, getPendingFollowRequests, getDoctorFollowers, getFollowingDoctors };
