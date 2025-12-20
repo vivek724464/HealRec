@@ -2,71 +2,153 @@ const Doctor = require("../models/docSchema");
 const Patient = require("../models/patientSchema");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
+const { generateOtp, getOtpKey } = require("../utils/otp");
 const { sendMail } = require("../utils/emailconfig");
 const { generateToken } = require("../utils/jwt");
+const generateUniqueUsername=require("../utils/usernameGenerator")
+const {sendSMS}=require("../utils/smsConfig");
+const redis = require("../config/redis");
+const OTP_TTL = 10 * 60;
 
-// REGISTER
-const register = async (req, res) => {
+
+const requestRegisterOtp = async (req, res) => {
   try {
-    let { name, email, password, role } = req.body;
-    if (!name || !email || !password || !role) {
-      return res.json({
-        success: false,
-        message: "Please provide all fields"
-      })
+    let {identifier,name, password, role } = req.body;
+    if (!identifier || !password || !name || !role) {
+      return res.json({ success: false, message: "All fields are required" });
     }
-    let existingUser = (await Doctor.findOne({ email: email })) || (await Patient.findOne({ email: email }));
-    if (existingUser) {
-      return res.json({
-        success: false,
-        message: "Email already registered!, Try again with another one."
-      })
-    }
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    let user;
-    if (role === 'patient') {
-      user = await Patient.create({ name, email, password: hashedPassword, role });
+      let type, value;
+    if (identifier.includes("@")) {
+      type = "email";
+      value = identifier.toLowerCase();
     } else {
-      user = await Doctor.create({ name, email, password: hashedPassword, role });
+      type = "phone";
+      value = identifier.startsWith("+91")
+        ? identifier
+        : "+91" + identifier.replace(/^0+/, "");
     }
-    return res.json({
-      success: true,
-      message: "Registered Successfully"
-    })
+    const exists =
+      (await Doctor.findOne({ [type]: value })) ||
+      (await Patient.findOne({ [type]: value }));
+   
+    if (exists) {
+      return res.json({ success: false, message: "${type} already registered" });
+    }
+    const otp = generateOtp();
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const key = getOtpKey(type, value);
+     await redis.setEx(
+      key,
+      OTP_TTL,
+      JSON.stringify({
+        name,
+        password: hashedPassword,
+        role,
+        type,
+        value,
+      })
+    );
+     if (type === "email") {
+      await sendMail(value, "HealRec OTP", `Your OTP is ${otp}`);
+    } else {
+      await sendSMS(value, `Your HealRec OTP is ${otp}`);
+    }
+      await redis.setEx(`${key}:otp`, OTP_TTL, otp);
+
+    res.json({ success: true, message: "OTP sent successfully", identifier});
+
   } catch (error) {
-    res.json({
-      success: false,
-      message: error.message
-    })
+    console.error(error);
+    res.status(500).json({ success: false, message: "Failed to send OTP", error: error.message });
   }
-}
+};
+
+const verifyRegisterOtp = async (req, res) => {
+  try {
+    const { identifier, otp } = req.body;
+    if (!identifier || !otp) {
+      return res.json({ success: false, message: "OTP is required" });
+    }
+    let type, value;
+    if (identifier.includes("@")) {
+      type = "email";
+      value = identifier.toLowerCase();
+    } else {
+      type = "phone";
+      value = identifier.startsWith("+91")
+        ? identifier
+        : "+91" + identifier.replace(/^0+/, "");
+    }
+    const key = getOtpKey(type, value);
+
+    const storedOtp = await redis.get(`${key}:otp`);
+    const userData = await redis.get(key);
+
+    if (!storedOtp || !userData || storedOtp !== otp) {
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    const data = JSON.parse(userData);
+
+    const Model = data.role === "doctor" ? Doctor : Patient;
+     const username = await generateUniqueUsername(
+      data.name,
+      Doctor,
+      Patient
+    );
+
+    const user = await Model.create({
+      name: data.name,
+      username,
+      password: data.password,
+      [type]: value,
+    });
+
+    await redis.del(key);
+    await redis.del(`${key}:otp`);
+
+    res.json({
+      success: true,
+      message: "Account created successfully",
+      username
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "OTP verification failed", error: error.message });
+  }
+};
+
 
 //LOGIN
 const login = async (req, res) => {
   try {
-    let { email, password } = req.body;
-    if (!email || !password) {
-      return res.json({
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({
         success: false,
-        message: "Please provide all fields"
-      })
-    }
-    let existingUser = await Doctor.findOne({ email }) || await Patient.findOne({ email });
-    if (!existingUser) {
-      return res.json({
-        success: false,
-        message: "You are not registered!"
+        message: "Username and password are required",
       });
     }
-    let isMatch = await bcrypt.compare(password, existingUser.password);
+     const cleanUsername = username.toLowerCase().trim();
+    const user =
+      (await Doctor.findOne({ username: cleanUsername })) ||
+      (await Patient.findOne({ username: cleanUsername }));
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid username or password",
+      });
+    }
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: "Invalid password!"
+        message: "Invalid username or password",
       });
     }
-    const token = generateToken(existingUser);
+    const token = generateToken(user);
     return res.json({
       success: true,
       message: "Login successful",
@@ -156,4 +238,4 @@ const resetPassword = async (req, res) => {
 }
 
 
-module.exports = { register, login, forgotPassword, resetPassword };
+module.exports = { requestRegisterOtp, verifyRegisterOtp, login, forgotPassword, resetPassword };

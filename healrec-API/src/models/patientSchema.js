@@ -4,15 +4,29 @@ const reportSchema = require("./reportSchema");
 
 const patientSchema = new mongoose.Schema(
   {
+    username: {
+    type: String,
+    unique: true,
+    required: true,
+    lowercase: true,
+    trim: true,
+  },
     name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
+     email: { type: String, unique: true, sparse: true }, 
+    phone: { type: String, unique: true, sparse: true },
     password: { type: String, required: true },
     role: { type: String, default: "patient" },
-    patientInfo: {
-      age: { type: Number },
-      gender: { type: String, enum: ["Male", "Female", "Other"] },
-      contact: { type: String },
-      bloodGroup: { type: String },
+     dateOfBirth: {
+      type: Date,
+    },
+      bloodGroup: {
+      type: String,
+      enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
+    },
+      emergencyContact: {
+      name: String,
+      relation: String,
+      phone: String,
     },
     reports: [reportSchema],
       followingDoctors: [
@@ -28,6 +42,10 @@ const patientSchema = new mongoose.Schema(
   ],
   resetPasswordToken: { type: String },
   resetPasswordExpire: { type: Date },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
 { timestamps: true });
 

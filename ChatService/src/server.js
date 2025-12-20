@@ -111,7 +111,8 @@ initWs(wss, { jwtSecret: JWT_SECRET });
     );
 
   } catch (err) {
-    console.log("Rabbit error", err.message);
+    console.log("Rabbit error");
+    console.log(err);
   }
 })();
 
