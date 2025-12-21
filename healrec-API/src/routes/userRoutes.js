@@ -11,7 +11,7 @@ router.post("/forget-password", forgotPassword);
 router.get("/reset-password/:token", (req, res) => {
     res.sendFile(path.join(__dirname, "../public/resetPassword.html"));
 });
-router.post("/reset-password/:token", resetPassword);
+router.post("/reset-password", resetPassword);
 
 
 module.exports=router;

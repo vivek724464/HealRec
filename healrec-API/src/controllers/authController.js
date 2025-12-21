@@ -205,77 +205,162 @@ const login = async (req, res) => {
 //FORGOTPASSWORD
 const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
-    const existingUser = await Doctor.findOne({ email: email }) || await Patient.findOne({ email: email });
-    if (!existingUser) {
+    let { identifier } = req.body;
+    if (!identifier) {
+      return res.json({ success: false, message: "Identifier is required" });
+    }
+
+    if (!isEmail(identifier)) {
+      identifier = normalizePhone(identifier);
+    }
+
+    const user =
+      (await Doctor.findOne({ email: identifier })) ||
+      (await Patient.findOne({ email: identifier })) ||
+      (await Doctor.findOne({ phone: identifier })) ||
+      (await Patient.findOne({ phone: identifier }));
+
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
+    if (user.signupMethod === "email") {
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const hashedToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex");
+
+      user.resetPasswordToken = hashedToken;
+      user.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
+      await user.save();
+
+      const resetUrl = `http://localhost:${process.env.PORT}/HealRec/reset-password/${resetToken}`;
+
+      await sendMail(
+        user.email,
+        "Password Reset - HealRec",
+        `Click here to reset your password: ${resetUrl}`
+      );
+
       return res.json({
-        success: false,
-        message: "User not found"
+        success: true,
+        message: "Password reset link sent to your email",
       });
     }
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
-    existingUser.resetPasswordToken = hashedToken;
-    existingUser.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
-    await existingUser.save();
-    const resetUrl = `http://localhost:${process.env.PORT}/HealRec/reset-password/${resetToken}`;
-    await sendMail(
-      email,
-      "Password Reset - HealRec",
-      `Click here to reset your password: ${resetUrl}`
-    )
+    const otp = generateOtp();
+    const normalizedPhone = normalizePhone(user.phone);
+    const otpKey = getOtpKey("phone", normalizedPhone);
+
+    await redis.set(
+      otpKey,
+      JSON.stringify({ userId: user._id.toString(), otp, attempts: 0 }),
+      { EX: 600 }
+    );
+    await sendSMS(
+      normalizedPhone,
+      `Your HealRec OTP for password reset is: ${otp}`
+    );
     return res.json({
       success: true,
-      message: "Password reset link sent to your email"
+      message: "OTP sent to your registered phone number",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    })
+    console.error(error);
+    return res.json({ success: false, message: error.message });
   }
-}
+};
 
 //RESETPASSWORD
 const resetPassword = async (req, res) => {
   try {
-    const { token } = req.params;
-    const { password } = req.body;
-    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
-    const user = await Doctor.findOne({
-      resetPasswordToken: hashedToken,
-      resetPasswordExpire: { $gt: Date.now() },
-    }) || await Patient.findOne({
-      resetPasswordToken: hashedToken,
-      resetPasswordExpire: { $gt: Date.now() },
-    })
-    if (!user) {
-      return res.json({
-        success: false,
-        message: "Invalid or expired token"
-      });
+    let { token, otp, password, phone } = req.body;
+
+    if (!password) {
+      return res.json({ success: false, message: "Password is required" });
+    }
+
+    let user;
+    if (token) {
+      const hashedToken = crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
+
+      user =
+        (await Doctor.findOne({
+          resetPasswordToken: hashedToken,
+          resetPasswordExpire: { $gt: Date.now() },
+        })) ||
+        (await Patient.findOne({
+          resetPasswordToken: hashedToken,
+          resetPasswordExpire: { $gt: Date.now() },
+        }));
+
+      if (!user) {
+        return res.json({ success: false, message: "Invalid or expired token" });
+      }
+
+    }
+    else {
+      if (!otp || !phone) {
+        return res.json({
+          success: false,
+          message: "OTP and phone are required",
+        });
+      }
+      const normalizedPhone = normalizePhone(phone);
+      const otpKey = getOtpKey("phone", normalizedPhone);
+
+      const raw = await redis.get(otpKey);
+      if (!raw) {
+        return res.json({ success: false, message: "OTP expired or invalid" });
+      }
+
+      const data = JSON.parse(raw);
+
+      if (data.attempts >= 3) {
+        await redis.del(otpKey);
+        return res.json({
+          success: false,
+          message: "Too many invalid attempts",
+        });
+      }
+
+      if (data.otp !== otp) {
+        data.attempts += 1;
+        await redis.set(otpKey, JSON.stringify(data), { EX: 600 });
+        return res.json({ success: false, message: "Invalid OTP" });
+      }
+
+      user =
+        (await Doctor.findById(data.userId)) ||
+        (await Patient.findById(data.userId));
+
+      if (!user) {
+        return res.json({ success: false, message: "User not found" });
+      }
+
+      await redis.del(otpKey);
     }
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
+
+    if (user.signupMethod === "email") {
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+    }
+
     await user.save();
-    await sendMail(
-      user.email,
-      "Password Reset confirmation - HealRec",
-      "Password reset successfully"
-    )
+
     return res.json({
       success: true,
-      message: "Password reset successful"
+      message: "Password reset successful",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message
-    })
+    console.error(error);
+    return res.json({ success: false, message: error.message });
   }
-}
+};
 
 
 module.exports = { requestRegisterOtp, verifyRegisterOtp, login, forgotPassword, resetPassword };
