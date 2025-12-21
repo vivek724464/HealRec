@@ -362,5 +362,30 @@ const resetPassword = async (req, res) => {
   }
 };
 
+const searchUserByUsername = async (req, res) => {
+  try {
+    const { q, limit = 10, page = 1 } = req.query;
 
-module.exports = { requestRegisterOtp, verifyRegisterOtp, login, forgotPassword, resetPassword };
+    if (!q) {
+      return res.status(400).json({ success: false, message: "Query 'q' is required" });
+    }
+
+    const regex = new RegExp(q, "i");
+
+    const skip = (page - 1) * limit;
+    const [doctors, patients] = await Promise.all([
+      Doctor.find({ username: regex }).select("username name email role").skip(skip).limit(Number(limit)),
+      Patient.find({ username: regex }).select("username name email role").skip(skip).limit(Number(limit)),
+    ]);
+
+    const results = [...doctors, ...patients];
+
+    res.json({ success: true, results });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to search users" });
+  }
+};
+
+
+module.exports = { requestRegisterOtp, verifyRegisterOtp, login, forgotPassword, resetPassword ,searchUserByUsername};
