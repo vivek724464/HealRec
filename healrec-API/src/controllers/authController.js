@@ -5,7 +5,8 @@ const crypto = require("crypto");
 const { generateOtp, getOtpKey } = require("../utils/otp");
 const { sendMail } = require("../utils/emailconfig");
 const { generateToken } = require("../utils/jwt");
-const generateUniqueUsername=require("../utils/usernameGenerator")
+const generateUniqueUsername=require("../utils/usernameGenerator");
+const {normalizePhone, isEmail}=require("../utils/normalize")
 const {sendSMS}=require("../utils/smsConfig");
 const redis = require("../config/redis");
 const OTP_TTL = 10 * 60;
@@ -13,86 +14,121 @@ const OTP_TTL = 10 * 60;
 
 const requestRegisterOtp = async (req, res) => {
   try {
-    let {identifier,name, password, role } = req.body;
+    let { identifier, name, password, role } = req.body;
+
     if (!identifier || !password || !name || !role) {
       return res.json({ success: false, message: "All fields are required" });
     }
-      let type, value;
-    if (identifier.includes("@")) {
-      type = "email";
-      value = identifier.toLowerCase();
+
+    if (!["doctor", "patient"].includes(role)) {
+      return res.json({ success: false, message: "Invalid role" });
+    }
+
+    let signupMethod, value;
+
+    if (isEmail(identifier)) {
+      signupMethod = "email";
+      value = identifier.toLowerCase().trim();
     } else {
-      type = "phone";
-      value = identifier.startsWith("+91")
-        ? identifier
-        : "+91" + identifier.replace(/^0+/, "");
+      signupMethod = "phone";
+      value =normalizePhone(identifier);
     }
+
     const exists =
-      (await Doctor.findOne({ [type]: value })) ||
-      (await Patient.findOne({ [type]: value }));
-   
+      (await Doctor.findOne({ [signupMethod]: value })) ||
+      (await Patient.findOne({ [signupMethod]: value }));
+
     if (exists) {
-      return res.json({ success: false, message: "${type} already registered" });
+      return res.json({
+        success: false,
+        message: `${signupMethod} already registered`,
+      });
     }
+
     const otp = generateOtp();
     const hashedPassword = await bcrypt.hash(password, 10);
+    const key = getOtpKey(signupMethod, value);
 
-    const key = getOtpKey(type, value);
-     await redis.setEx(
+    await redis.setEx(
       key,
       OTP_TTL,
       JSON.stringify({
+        otp,
         name,
         password: hashedPassword,
         role,
-        type,
-        value,
+        signupMethod,
+        identifier: value, 
       })
     );
-     if (type === "email") {
-      await sendMail(value, "HealRec OTP", `Your OTP is ${otp}`);
-    } else {
-      await sendSMS(value, `Your HealRec OTP is ${otp}`);
-    }
-      await redis.setEx(`${key}:otp`, OTP_TTL, otp);
 
-    res.json({ success: true, message: "OTP sent successfully", identifier});
+    signupMethod === "email"
+      ? await sendMail(value, "HealRec OTP", `Your OTP is ${otp}`)
+      : await sendSMS(value, `Your HealRec OTP is ${otp}`);
 
+    return res.json({
+      success: true,
+      message: "OTP sent successfully",
+      identifier: value,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Failed to send OTP", error: error.message });
+    console.log(error);
+    return res.json({
+      success: false,
+      message: "Failed to send OTP",
+    });
   }
 };
+
+
 
 const verifyRegisterOtp = async (req, res) => {
   try {
     const { identifier, otp } = req.body;
+
     if (!identifier || !otp) {
       return res.json({ success: false, message: "OTP is required" });
     }
-    let type, value;
-    if (identifier.includes("@")) {
-      type = "email";
-      value = identifier.toLowerCase();
+
+    let signupMethod, value;
+
+    if (isEmail(identifier)) {
+      signupMethod = "email";
+      value = identifier.toLowerCase().trim();
     } else {
-      type = "phone";
-      value = identifier.startsWith("+91")
-        ? identifier
-        : "+91" + identifier.replace(/^0+/, "");
-    }
-    const key = getOtpKey(type, value);
-
-    const storedOtp = await redis.get(`${key}:otp`);
-    const userData = await redis.get(key);
-
-    if (!storedOtp || !userData || storedOtp !== otp) {
-      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+      signupMethod = "phone";
+      value = normalizePhone(identifier)
     }
 
-    const data = JSON.parse(userData);
+    const key = getOtpKey(signupMethod, value);
+    const raw = await redis.get(key);
+
+    if (!raw) {
+      return res.json({
+        success: false,
+        message: "OTP expired or invalid",
+      });
+    }
+
+    const data = JSON.parse(raw);
+
+    if (data.otp !== otp) {
+      return res.json({
+        success: false,
+        message: "Invalid OTP",
+      });
+    }
+
+    if (!["doctor", "patient"].includes(data.role)) {
+      return res.json({
+        success: false,
+        message: "Invalid role",
+      });
+    }
 
     const Model = data.role === "doctor" ? Doctor : Patient;
-     const username = await generateUniqueUsername(
+
+    const username = await generateUniqueUsername(
       data.name,
       Doctor,
       Patient
@@ -102,22 +138,26 @@ const verifyRegisterOtp = async (req, res) => {
       name: data.name,
       username,
       password: data.password,
-      [type]: value,
+      signupMethod: data.signupMethod,   
+      [data.signupMethod]: data.identifier, 
     });
 
     await redis.del(key);
-    await redis.del(`${key}:otp`);
 
-    res.json({
+    return res.json({
       success: true,
       message: "Account created successfully",
-      username
+      username,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "OTP verification failed", error: error.message });
+    return res.json({
+      success: false,
+      message: "OTP verification failed",
+    });
   }
 };
+
 
 
 //LOGIN

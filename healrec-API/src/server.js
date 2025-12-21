@@ -16,10 +16,15 @@ app.use(express.static(path.join(__dirname, "public")));
 const userRouter = require("./routes/userRoutes");
 const reportRouter = require("./routes/reportRoutes");
 const followRouter=require("./routes/followRoutes");
+const docRouter=require("./routes/docRoutes");
+const patientRouter=require("./routes/patientRoutes");
 
 app.use("/HealRec/users", userRouter);
 app.use("/HealRec/reports", reportRouter);
 app.use("/HealRec/followers", followRouter);
+app.use("/HealRec/doctor",docRouter);
+app.use("/HealRec/patient", patientRouter);
+
 
 app.get("/", (req, res) => {
   res.send("Welcome to HealRec API");

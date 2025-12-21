@@ -5,49 +5,56 @@ const reportSchema = require("./reportSchema");
 const patientSchema = new mongoose.Schema(
   {
     username: {
-    type: String,
-    unique: true,
-    required: true,
-    lowercase: true,
-    trim: true,
-  },
+      type: String,
+      unique: true,
+      required: true,
+      lowercase: true,
+      trim: true,
+    },
     name: { type: String, required: true },
-     email: { type: String, unique: true, sparse: true }, 
+    email: { type: String, unique: true, sparse: true },
     phone: { type: String, unique: true, sparse: true },
     password: { type: String, required: true },
     role: { type: String, default: "patient" },
-     dateOfBirth: {
+    dateOfBirth: {
       type: Date,
     },
-      bloodGroup: {
+    bloodGroup: {
       type: String,
       enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
     },
-      emergencyContact: {
+    emergencyContact: {
       name: String,
       relation: String,
       phone: String,
     },
-    reports: [reportSchema],
-      followingDoctors: [
-    {
-      doctor: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor" },
-      status: {
-        type: String,
-        enum: ["pending", "accepted", "declined"],
-        default: "pending",
-      },
-      createdAt: { type: Date, default: Date.now },
+    signupMethod: {
+      type: String,
+      enum: ["email", "phone"],
+      required: true,
+      immutable: true,
     },
-  ],
-  resetPasswordToken: { type: String },
-  resetPasswordExpire: { type: Date },
+
+    reports: [reportSchema],
+    followingDoctors: [
+      {
+        doctor: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor" },
+        status: {
+          type: String,
+          enum: ["pending", "accepted", "declined"],
+          default: "pending",
+        },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    resetPasswordToken: { type: String },
+    resetPasswordExpire: { type: Date },
     isActive: {
       type: Boolean,
       default: true,
     },
   },
-{ timestamps: true });
+  { timestamps: true });
 
 
 module.exports = mongoose.model("Patient", patientSchema);
