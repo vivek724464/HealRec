@@ -2,124 +2,132 @@ const Doctor = require("../models/docSchema");
 const Patient = require("../models/patientSchema");
 const{publishFollowAccepted, publishFollowRevoked,}= require("../config/rabbitUtil");
 
-const sendFolloRequest = async (req, res) => {
-    try {
-        const patientId = req.user.id;
-        const { doctorId } = req.body;
-        if (!doctorId) {
-            return res.json({
-                success: false,
-                message: "doctorId is required"
-            })
-        }
-        const doctor = await Doctor.findById(doctorId);
-        const patient = await Patient.findById(patientId);
+const sendFollowRequest = async (req, res) => {
+  try {
+    const patientId = req.user._id;
+    console.log(patientId)
+    const { doctorId } = req.body;
 
-        if (!doctor || !patient) {
-            return res.json({
-                success: false,
-                message: "Doctor or Patient not found"
-            })
-        }
-        const existingRequest = doctor.followRequests.find((r) =>
-            r.patient.toString() === patientId
-        )
-        if (existingRequest) {
-            return res.json({
-                success: false,
-                message: "Request already sent"
-            })
-        }
-        doctor.followRequests.push({ patient: patientId, status: "pending" });
-        patient.followingDoctors.push({ doctor: doctorId, status: "pending" });
-
-
-        await doctor.save();
-        await patient.save();
-
-        return res.json({
-            success: true,
-            message: "Follow request sent"
-        })
-    } catch (error) {
-        res.json({
-            success: false,
-            message: error.message
-        })
+    if (!doctorId) {
+      return res.status(400).json({
+        success: false,
+        message: "doctorId is required",
+      });
     }
-}
+
+    const doctor = await Doctor.findById(doctorId);
+    const patient = await Patient.findById(patientId);
+
+    if (!doctor || !patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor or Patient not found",
+      });
+    }
+
+    const doctorRequest = doctor.followRequests.find(
+      (r) => r.patient.toString() === patientId.toString()
+    );
+
+    const patientRequest = patient.followingDoctors.find(
+      (f) => f.doctor.toString() === doctorId.toString()
+    );
+
+    if (doctorRequest || patientRequest) {
+      return res.status(400).json({
+        success: false,
+        message: "Follow request already exists",
+      });
+    }
+
+    doctor.followRequests.push({
+      patient: patientId,
+      status: "pending",
+    });
+
+    patient.followingDoctors.push({
+      doctor: doctorId,
+      status: "pending",
+    });
+
+    await doctor.save();
+    await patient.save();
+
+    return res.json({
+      success: true,
+      status: "pending", 
+      message: "Follow request sent",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 
 const sendUnfollowRequest = async (req, res) => {
-    try {
-        const patientId = req.user.id;
-        const { doctorId } = req.body;
-        if (!doctorId) {
-            return res.json({
-                success: false,
-                message: "doctorId is required"
-            })
-        }
-        const doctor = await Doctor.findById(doctorId);
-        const patient = await Patient.findById(patientId);
-        if (!doctor || !patient) {
-            return res.json({
-                success: false,
-                message: "Doctor or Patient not found",
-            });
-        }
+  try {
+    const patientId = req.user._id;
+    const { doctorId } = req.body;
 
-        const followEntry = patient.followingDoctors.find((f) => f.doctor.toString() === doctorId.toString());
-        if (!followEntry) {
-            return res.json({
-                success: false,
-                message: "You are not following or haven't requested to follow this doctor"
-            })
-        }
-        const doesDochaveReq = doctor.followRequests.find((r) => r.doctor.toString() === doctorId.toString());
-        if (!doesDochaveReq) {
-            return res.json({
-                success: false,
-                message: "Follow request not found in doctor's record"
-            })
-        }
-        if (doesDochaveReq.status === "pending") {
-            doctor.followRequests = doctor.followRequests.filter((f) => f.patient.toString() !== patientId.toString());
-            patient.followingDoctors = patient.followingDoctors.filter((r) => r.doctor.toString() !== doctorId.toString());
-
-            await doctor.save();
-            await patient.save();
-            return res.json({
-                success: true,
-                message: "Follow request canceled successfully"
-            })
-        }
-
-        if (doesDochaveReq.status === "accepted") {
-            doctor.followRequests = doctor.followRequests.filter((f) => f.patient.toString() !== patientId.toString());
-            patient.followingDoctors = patient.followingDoctors.filter((r) => r.doctor.toString() !== doctorId.toString());
-
-            await doctor.save();
-            await patient.save();
-            return res.json({
-                success: true,
-                message: "Doctor unfollwed successfully"
-            })
-        }
-        return re.json({
-            success: false,
-            message: "Cannot unfollow. Follow request already declined.",
-        })
-    } catch (error) {
-        return res.json({
-            success: false,
-            message: error.message
-        })
+    if (!doctorId) {
+      return res.status(400).json({
+        success: false,
+        message: "doctorId is required",
+      });
     }
-}
+
+    const doctor = await Doctor.findById(doctorId);
+    const patient = await Patient.findById(patientId);
+
+    if (!doctor || !patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor or Patient not found",
+      });
+    }
+    const doctorRequest = doctor.followRequests.find(
+      (r) => r.patient.toString() === patientId.toString()
+    );
+
+    const patientRequest = patient.followingDoctors.find(
+      (f) => f.doctor.toString() === doctorId.toString()
+    );
+
+    if (!doctorRequest || !patientRequest) {
+      return res.status(400).json({
+        success: false,
+        message: "No follow request found",
+      });
+    }
+    doctor.followRequests = doctor.followRequests.filter(
+      (r) => r.patient.toString() !== patientId.toString()
+    );
+
+    patient.followingDoctors = patient.followingDoctors.filter(
+      (f) => f.doctor.toString() !== doctorId.toString()
+    );
+
+    await doctor.save();
+    await patient.save();
+
+    return res.json({
+      success: true,
+      message: "Follow request cancelled",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 const acceptFollowRequest = async (req, res) => {
     try {
-        const doctorId = req.user.id;
+        const doctorId = req.user._id;
         const { patientId } = req.body;
         if (!patientId) {
             return res.json({
@@ -188,7 +196,7 @@ const acceptFollowRequest = async (req, res) => {
 
 const declineFollowRequest = async (req, res) => {
     try {
-        const doctorId = req.user.id;
+        const doctorId = req.user._id;
         const { patientId } = req.body;
         if (!patientId) {
             return res.json({
@@ -247,7 +255,7 @@ const declineFollowRequest = async (req, res) => {
 
 const getPendingFollowRequests = async (req, res) => {
     try {
-        const doctorId = req.user.id;
+        const doctorId = req.user._id;
         const doctor = await Doctor.findById(doctorId).populate("followRequests.patient", "name email");
 
         const pending = doctor.followRequests.filter(r => r.status === "pending");
@@ -267,7 +275,7 @@ const getPendingFollowRequests = async (req, res) => {
 
 const getDoctorFollowers = async (req, res) => {
     try {
-        const doctorId = req.user.id;
+        const doctorId = req.user._id;
         const doctor = await Doctor.findById(doctorId).populate("followRequests.patient", "name email patientInfo");
 
         const accepted = doctor.followRequests.filter(r => r.status === "accepted");
@@ -285,22 +293,26 @@ const getDoctorFollowers = async (req, res) => {
 };
 
 const getFollowingDoctors = async (req, res) => {
-    try {
-        const patientId = req.user.id;
-        const patient = await Patient.findById(patientId).populate("followingDoctors.doctor", "name email doctorInfo");
+  try {
+    const patientId = req.user._id;
 
-        const accepted = patient.followingDoctors.filter(f => f.status === "accepted");
+    const patient = await Patient.findById(patientId).populate(
+      "followingDoctors.doctor",
+      "name email specialization experience rating"
+    );
 
-        return res.json({
-            success: true,
-            following: accepted
-        });
-    } catch (error) {
-        return res.json({
-            success: false,
-            message: error.message
-        });
-    }
+    return res.json({
+      success: true,
+      following: patient.followingDoctors,
+    });
+  } catch (error) {
+    return res.json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
 
-module.exports = { sendFolloRequest, sendUnfollowRequest, acceptFollowRequest, declineFollowRequest, getPendingFollowRequests, getDoctorFollowers, getFollowingDoctors };
+
+
+module.exports = { sendFollowRequest, sendUnfollowRequest, acceptFollowRequest, declineFollowRequest, getPendingFollowRequests, getDoctorFollowers, getFollowingDoctors };

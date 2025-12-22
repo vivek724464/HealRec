@@ -1,4 +1,5 @@
 const Patient = require("../models/patientSchema");
+const Doctor = require("../models/docSchema");
 const redis = require("../config/redis");
 const { normalizePhone } = require("../utils/normalize");
 const { isEmailOrPhoneTaken } = require("../utils/GlobalUnique");
@@ -133,7 +134,58 @@ const verifyPatientProfileUpdateRequestOtp = async (req, res) => {
   }
 };
 
+
+const searchDoctors = async (req, res) => {
+  try {
+    const patientId = req.user._id;
+    const { q } = req.query;
+
+    if (!q || q.trim().length < 2) {
+      return res.json({ success: true, doctors: [] });
+    }
+
+    const regex = new RegExp(q, "i");
+
+    const doctors = await Doctor.find({
+      $or: [{ name: regex }, { specialization: regex }],
+    }).select("name specialization experience rating");
+
+    const patient = await Patient.findById(patientId).select("followingDoctors");
+
+    // ✅ SAFE MAP
+    const followingMap = new Map();
+    if (patient?.followingDoctors?.length) {
+      patient.followingDoctors.forEach((f) => {
+        followingMap.set(f.doctor.toString(), f.status);
+      });
+    }
+
+    const enrichedDoctors = doctors.map((doc) => ({
+      _id: doc._id,
+      name: doc.name,
+      specialization: doc.specialization,
+      experience: doc.experience,
+      rating: doc.rating,
+      connectionStatus: followingMap.get(doc._id.toString()) || "none",
+    }));
+
+    return res.json({
+      success: true,
+      doctors: enrichedDoctors,
+    });
+  } catch (error) {
+    console.error("SEARCH DOCTOR ERROR:", error); // 🔥 IMPORTANT
+    return res.status(500).json({
+      success: false,
+      message: "Doctor search failed",
+    });
+  }
+};
+
+
+
 module.exports = {
   updatePatientProfileOtpRequest,
   verifyPatientProfileUpdateRequestOtp,
+  searchDoctors
 };

@@ -28,7 +28,7 @@ const DoctorCard = ({
             <Avatar className="h-12 w-12">
               <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-white text-lg">
                 {name
-                  .split(" ")
+                  ?.split(" ")
                   .map((n) => n[0])
                   .join("")}
               </AvatarFallback>
@@ -38,48 +38,67 @@ const DoctorCard = ({
               <CardDescription>{specialty}</CardDescription>
             </div>
           </div>
+
           {connectionStatus === "connected" && (
             <Badge className="bg-accent">
               <Check className="h-3 w-3 mr-1" />
               Connected
             </Badge>
           )}
+
           {connectionStatus === "pending" && (
             <Badge variant="secondary">Pending</Badge>
           )}
         </div>
       </CardHeader>
+
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Experience:</span>
           <span className="font-medium">{experience}</span>
         </div>
+
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Rating:</span>
           <span className="font-medium">⭐ {rating}/5.0</span>
         </div>
 
+        {/* ACTION BUTTONS */}
         <div className="flex gap-2 pt-2">
+          {/* NOT FOLLOWING */}
           {connectionStatus === "none" && (
             <Button onClick={onConnect} className="flex-1">
               <UserPlus className="h-4 w-4 mr-2" />
               Follow
             </Button>
           )}
+
+          {/* PENDING */}
           {connectionStatus === "pending" && (
-            <Button variant="outline" disabled className="flex-1">
-              Request Sent
-            </Button>
+            <>
+              <Button variant="outline" disabled className="flex-1">
+                Request Pending
+              </Button>
+              {onUnfollow && (
+                <Button variant="destructive" onClick={onUnfollow}>
+                  <UserMinus className="h-4 w-4" />
+                </Button>
+              )}
+            </>
           )}
+
+          {/* CONNECTED */}
           {connectionStatus === "connected" && (
             <>
               <Button onClick={onMessage} className="flex-1">
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Message
               </Button>
-              <Button onClick={onUnfollow} variant="outline">
-                <UserMinus className="h-4 w-4" />
-              </Button>
+              {onUnfollow && (
+                <Button variant="outline" onClick={onUnfollow}>
+                  <UserMinus className="h-4 w-4" />
+                </Button>
+              )}
             </>
           )}
         </div>

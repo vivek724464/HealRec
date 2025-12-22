@@ -7,7 +7,7 @@ const MedicalRecordCard = ({
   fileName,
   fileType,
   uploadDate,
-  fileSize,
+  fileSize = "—",
   sharedWith = [],
   onView,
   onDownload,
@@ -15,7 +15,7 @@ const MedicalRecordCard = ({
   onDelete,
 }) => {
   const getFileIcon = () => {
-    switch (fileType.toLowerCase()) {
+    switch ((fileType || "").toLowerCase()) {
       case "pdf":
         return "📄";
       case "doc":
@@ -44,7 +44,7 @@ const MedicalRecordCard = ({
                 <h4 className="font-medium truncate">{fileName}</h4>
                 <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                   <Badge variant="secondary" className="text-xs">
-                    {fileType.toUpperCase()}
+                    {fileType?.toUpperCase()}
                   </Badge>
                   <span>•</span>
                   <span>{fileSize}</span>

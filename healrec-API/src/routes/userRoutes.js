@@ -16,4 +16,5 @@ router.post("/reset-password", resetPassword);
 router.get("/search", isLoggedIn, searchUserByUsername);
 
 
+
 module.exports=router;

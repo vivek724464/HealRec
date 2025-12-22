@@ -2,11 +2,34 @@ const express = require("express");
 const dotenv = require("dotenv");
 const path = require("path");
 const connectDB = require("./config/db");
+const cors = require("cors")
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
-
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+// Allow common local dev ports including 8080 (Vite sometimes uses 8080)
+const ALLOWED_ORIGINS = [
+  FRONTEND_URL,
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "http://localhost:8081",
+  "http://192.168.56.1:8080",
+];
+app.use(
+  cors({
+    origin: function (origin, cb) {
+      if (!origin) return cb(null, true);
+      if (ALLOWED_ORIGINS.indexOf(origin) !== -1) return cb(null, true);
+      return cb(new Error("CORS not allowed"));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+    preflightContinue: false,
+  })
+);
 connectDB();
 
 app.use(express.json());

@@ -44,48 +44,37 @@ const FileUploadCard = ({ onUploadSuccess }) => {
   const navigate = useNavigate();
 
   const handleUpload = () => {
-    if (selectedFiles.length === 0) {
-      toast.error("Please select at least one file");
-      return;
-    }
+  if (selectedFiles.length === 0) {
+    toast.error("Please select at least one file");
+    return;
+  }
 
-    const user = authService.getCurrentUser();
-    const patientId = user?._id;
+  setUploading(true);
 
-    if (!patientId || user.role !== "patient") {
-      toast.error("You must be logged in as a patient to upload reports");
-      navigate('/login');
-      return;
-    }
+  const uploads = selectedFiles.map((file) => {
+    const formData = new FormData();
+    formData.append("report", file); // ✅ ONLY FILE
+    return dataService.uploadReport(formData);
+  });
 
-    setUploading(true);
-
-    // Upload files one by one (server expects single file per request)
-    const uploads = selectedFiles.map((file) => {
-      const formData = new FormData();
-      formData.append("report", file);
-      formData.append("patientId", patientId);
-      return dataService.uploadReport(formData);
-    });
-
-    Promise.all(uploads)
-      .then((results) => {
-        const successCount = results.filter(r => r?.success).length;
-        if (successCount > 0) {
-          toast.success(`${successCount} file(s) uploaded successfully!`);
-          if (onUploadSuccess) onUploadSuccess();
-        } else {
-          toast.error("Failed to upload files");
-        }
-        setSelectedFiles([]);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      })
-      .catch((err) => {
-        console.error("Upload error:", err);
-        toast.error("Error uploading files");
-      })
-      .finally(() => setUploading(false));
-  };
+  Promise.all(uploads)
+    .then((results) => {
+      const successCount = results.filter(r => r?.success).length;
+      if (successCount > 0) {
+        toast.success(`${successCount} file(s) uploaded successfully!`);
+        onUploadSuccess?.();
+      } else {
+        toast.error("Failed to upload files");
+      }
+      setSelectedFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    })
+    .catch((err) => {
+      console.error("Upload error:", err);
+      toast.error("Error uploading files");
+    })
+    .finally(() => setUploading(false));
+};
 
   return (
     <Card className="shadow-soft hover:shadow-elevated transition-all">

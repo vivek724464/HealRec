@@ -36,7 +36,7 @@ const Navigation = ({ userRole, userName, notificationCount = 0 }) => {
               <span className="text-white font-bold text-xl">H</span>
             </div>
             <span className="font-bold text-xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              HealthConnect
+              HealRec
             </span>
           </Link>
 

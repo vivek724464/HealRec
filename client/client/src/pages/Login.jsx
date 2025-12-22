@@ -31,27 +31,23 @@ const Login = () => {
 
     try {
       setLoading(true);
-      const response = await authService.login(formData.username, formData.password);
-      
-      if (response?.token && response?.user) {
-        localStorage.setItem("token", response.token);
-        localStorage.setItem("user", JSON.stringify(response.user));
-        
-        toast.success("Login successful!");
-        // Decode JWT to get user role
-        try {
-          const base64Url = response.token.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          }).join(''));
-          const user = JSON.parse(jsonPayload);
-          localStorage.setItem("user", JSON.stringify(user));
-          navigate(user.role === "doctor" ? "/doctor/dashboard" : "/patient/dashboard");
-        } catch (err) {
-          navigate("/patient/dashboard");
-        }
-      }
+
+      // 🔥 authService.login already saves token + user correctly
+      const response = await authService.login(
+        formData.username,
+        formData.password
+      );
+
+      toast.success("Login successful!");
+
+      // ✅ USE USER RETURNED BY BACKEND
+      const role = response.user.role;
+
+      navigate(
+        role === "doctor"
+          ? "/doctor/dashboard"
+          : "/patient/dashboard"
+      );
     } catch (error) {
       console.error("Login error:", error);
       toast.error(error.response?.data?.message || "Login failed");

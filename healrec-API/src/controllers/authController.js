@@ -192,7 +192,14 @@ const login = async (req, res) => {
     return res.json({
       success: true,
       message: "Login successful",
-      token: token
+      token: token,
+      user: {
+        _id: user._id,
+        id: user._id,
+        username: user.username,
+        name: user.name,
+        role: user.role || (user.specialization ? "doctor" : "patient"),
+      }
     });
   } catch (error) {
     res.json({

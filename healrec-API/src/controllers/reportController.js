@@ -3,76 +3,47 @@ const Patient = require("../models/patientSchema");
 
 const uploadReport = async (req, res) => {
   try {
-    const { patientId } = req.body;
-
     if (!req.file) {
-      return res.json({
+      return res.status(400).json({
         success: false,
-        message: "No file uploaded"
+        message: "No file uploaded",
       });
     }
-
-    if (!patientId) {
-      return res.json({
-        success: false,
-        message: "patientId is required in body"
-      });
-    }
-
-    const fileName = req.file.originalname || req.file.filename;
-    const fileType = req.file.mimetype || "application/octet-stream";
-
-    let filePath = req.file?.path || req.file?.secure_url || req.file?.url;
-
-    if (!filePath) {
-      return res.json({
-        success: false,
-        message: "Uploaded file URL not found"
-      });
-    }
-     const format =
-      req.file?.format ||
-      fileType.split("/")[1] ||
-      fileName.split(".").pop();
-    if (!filePath.endsWith(`.${format}`)) {
-      filePath += `.${format}`;
-    }
+    const patientId = req.user._id;
 
     const patient = await Patient.findById(patientId);
     if (!patient) {
-      return res.json({
+      return res.status(404).json({
         success: false,
-        message: "Patient not found"
+        message: "Patient not found",
       });
     }
 
     const reportData = {
-      fileName,
-      url: filePath,
-      fileType,
+      fileName: req.file.originalname,
+      url: req.file.path || req.file.secure_url,
+      fileType: req.file.mimetype,
       uploadedAt: new Date(),
     };
 
-    console.log("REPORT TO PUSH:", reportData);
-
     patient.reports.push(reportData);
+    await patient.save();
 
-    await patient.save({ validateBeforeSave: false });
-
-    res.json({
+    return res.json({
       success: true,
       message: "Report uploaded and saved successfully",
       report: reportData,
     });
   } catch (error) {
     console.error("Error in uploadReport:", error);
-    res.json({
+    return res.status(500).json({
       success: false,
       message: "Error uploading report",
-      error: error.message || error
+      error: error.message,
     });
   }
 };
+
 
 const getReports = async (req, res) => {
   try {

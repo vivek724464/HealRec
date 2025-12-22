@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { sendFolloRequest,
+const { sendFollowRequest,
     sendUnfollowRequest,
     acceptFollowRequest,
     declineFollowRequest,
@@ -10,7 +10,7 @@ const { sendFolloRequest,
     getFollowingDoctors } = require("../controllers/followController");
 const {isLoggedIn, isPatient, isDoctor}=require("../middleware/authmiddleware");
 
-router.post("/follow-request", isLoggedIn, isPatient, sendFolloRequest);
+router.post("/follow-request", isLoggedIn, isPatient, sendFollowRequest);
 router.post("/accept-request", isLoggedIn, isDoctor, acceptFollowRequest);
 router.post("/decline-request", isLoggedIn, isDoctor, declineFollowRequest);
 router.post("/unfollow-request", isLoggedIn, isPatient, sendUnfollowRequest);
