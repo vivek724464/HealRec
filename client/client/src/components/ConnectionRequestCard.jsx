@@ -4,22 +4,28 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Check, X, Clock } from "lucide-react";
 
 const ConnectionRequestCard = ({
-  patientName,
+  patient,
   requestDate,
   message,
   onAccept,
   onDecline,
 }) => {
+  // ✅ SAFETY FIRST
+  const patientName = patient?.name || "Unknown Patient";
+
+  const initials = patientName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+
   return (
     <Card className="hover:shadow-elevated transition-all border-l-4 border-l-primary">
       <CardContent className="p-4">
         <div className="flex items-start gap-4">
           <Avatar className="h-12 w-12 flex-shrink-0">
             <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-white">
-              {patientName
-                .split(" ")
-                .map((n) => n[0])
-                .join("")}
+              {initials}
             </AvatarFallback>
           </Avatar>
 
@@ -27,10 +33,13 @@ const ConnectionRequestCard = ({
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h4 className="font-semibold">{patientName}</h4>
-                <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                  <Clock className="h-3 w-3" />
-                  {requestDate}
-                </p>
+
+                {requestDate && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                    <Clock className="h-3 w-3" />
+                    {requestDate}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -45,6 +54,7 @@ const ConnectionRequestCard = ({
                 <Check className="h-4 w-4 mr-1" />
                 Accept
               </Button>
+
               <Button
                 onClick={onDecline}
                 variant="outline"

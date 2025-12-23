@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Navigation from "@/components/Navigation";
 import ConnectionRequestCard from "@/components/ConnectionRequestCard";
-import DoctorCard from "@/components/DoctorCard";
-import MedicalRecordCard from "@/components/MedicalRecordCard";
+import FollowRequestPopup from "@/components/FollowRequestPopup";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -11,49 +11,137 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Users, UserCheck, Clock, FileText } from "lucide-react";
+import { Users, UserCheck, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+
 import { dataService } from "@/services/dataService";
+import { useNotifications } from "@/context/NotificationContext";
 
 const DoctorDashboard = () => {
   const navigate = useNavigate();
+
   const [requests, setRequests] = useState([]);
   const [patients, setPatients] = useState([]);
-  const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Get current user from localStorage
+  const { notifications, removeNotification } = useNotifications();
+
   const user = JSON.parse(localStorage.getItem("user")) || {};
-  const doctorId = user._id;
+  const doctorId = user?.id || user?._id;
+
+  /* ================= INITIAL LOAD ================= */
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [requestsData, patientsData, recordsData] = await Promise.all([
+
+        const [reqRes, patRes] = await Promise.all([
           dataService.getPendingRequests(),
           dataService.getDoctorPatients(),
-          dataService.getSharedRecords(),
         ]);
-        setRequests(requestsData?.data || []);
-        setPatients(patientsData?.data || []);
-        setRecords(recordsData?.data || []);
+
+        setRequests(reqRes?.data || []);
+        setPatients(patRes?.data || []);
       } catch (err) {
-        console.error("Error fetching dashboard data:", err);
+        console.error("Dashboard fetch error:", err);
         toast.error("Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
     };
 
-    if (doctorId) {
-      fetchData();
-    }
+    if (doctorId) fetchData();
   }, [doctorId]);
 
+  /* ================= ACTIONS ================= */
+
+  const handleAccept = async (patientId) => {
+    try {
+      await dataService.acceptFollowRequest(patientId);
+
+      const accepted = requests.find(
+        (r) => r.patient._id === patientId
+      );
+
+      setRequests((prev) =>
+        prev.filter((r) => r.patient._id !== patientId)
+      );
+
+      if (accepted) {
+        setPatients((prev) => [...prev, accepted]);
+      }
+
+      toast.success("Follow request accepted");
+    } catch {
+      toast.error("Failed to accept request");
+    }
+  };
+
+  const handleDecline = async (patientId) => {
+    try {
+      await dataService.declineFollowRequest(patientId);
+
+      setRequests((prev) =>
+        prev.filter((r) => r.patient._id !== patientId)
+      );
+
+      toast.error("Follow request declined");
+    } catch {
+      toast.error("Failed to decline request");
+    }
+  };
+
+  const handleRemovePatient = async (patientId) => {
+  try {
+    await dataService.removePatient(patientId);
+
+    setPatients((prev) =>
+      prev.filter((p) => (p.patient?._id || p._id) !== patientId)
+    );
+
+    toast.success("Patient removed");
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to remove patient");
+  }
+};
+
+
+  /* ================= REAL-TIME STATE UPDATES ================= */
+  useEffect(() => {
+    notifications.forEach((n) => {
+      const patientId = n.payload?.patientId;
+      if (!patientId) return;
+
+      if (n.type === "FOLLOW_REQUEST") {
+        setRequests((prev) => [
+          {
+            patient: {
+              _id: patientId,
+              name: n.payload.patientName,
+            },
+            createdAt: new Date(),
+          },
+          ...prev,
+        ]);
+      }
+
+      if (
+        n.type === "FOLLOW_UNFOLLOWED" ||
+        n.type === "FOLLOW_REVOKED"
+      ) {
+        setPatients((prev) =>
+          prev.filter((p) => p.patient._id !== patientId)
+        );
+      }
+    });
+  }, [notifications]);
+
+  /* ================= STATS ================= */
   const stats = [
     {
       title: "Total Patients",
@@ -69,7 +157,7 @@ const DoctorDashboard = () => {
     },
     {
       title: "Active Connections",
-      value: patients.filter(p => p.isActive).length.toString(),
+      value: patients.length.toString(),
       icon: UserCheck,
       color: "from-primary to-accent",
     },
@@ -77,78 +165,63 @@ const DoctorDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navigation
-        userRole="doctor"
-        userName={user?.name || "Doctor"}
-        notificationCount={requests.length}
-      />
+      <Navigation notificationCount={requests.length} />
 
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">
-            Good morning, {user?.name || "Doctor"}! 👨‍⚕️
-          </h1>
-          <p className="text-muted-foreground">
-            Manage your patients and review medical records
-          </p>
-        </div>
+        <h1 className="text-4xl font-bold mb-6">
+          Welcome, {user?.name || "Doctor"} 👨‍⚕️
+        </h1>
 
-        {/* Stats Cards */}
+        {/* STATS */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
-          {stats.map((stat) => (
-            <Card
-              key={stat.title}
-              className="hover:shadow-elevated transition-all"
-            >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      {stat.title}
-                    </p>
-                    <p className="text-3xl font-bold">{stat.value}</p>
-                  </div>
-                  <div
-                    className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center`}
-                  >
-                    <stat.icon className="h-6 w-6 text-white" />
-                  </div>
+          {stats.map((s) => (
+            <Card key={s.title}>
+              <CardContent className="p-6 flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-muted-foreground">{s.title}</p>
+                  <p className="text-3xl font-bold">{s.value}</p>
+                </div>
+                <div
+                  className={`w-12 h-12 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center`}
+                >
+                  <s.icon className="h-6 w-6 text-white" />
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        <Tabs defaultValue="requests" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="requests">Follow Requests</TabsTrigger>
-            <TabsTrigger value="patients">My Patients</TabsTrigger>
-            <TabsTrigger value="records">Patient Records</TabsTrigger>
+        <Tabs defaultValue="requests">
+          <TabsList className="grid grid-cols-2">
+            <TabsTrigger value="requests">Requests</TabsTrigger>
+            <TabsTrigger value="patients">Patients</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="requests" className="space-y-6">
+          {/* REQUESTS */}
+          <TabsContent value="requests">
             <Card>
               <CardHeader>
-                <CardTitle>Pending Follow Requests</CardTitle>
+                <CardTitle>Pending Requests</CardTitle>
                 <CardDescription>
-                  Review and respond to patient connection requests
+                  Accept or decline follow requests
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {loading ? (
-                  <p className="text-muted-foreground">Loading requests...</p>
-                ) : requests.length === 0 ? (
-                  <p className="text-muted-foreground">No pending requests.</p>
+                {requests.length === 0 ? (
+                  <p>No pending requests</p>
                 ) : (
-                  requests.map((request) => (
+                  requests.map((r) => (
                     <ConnectionRequestCard
-                      key={request._id}
-                      {...request}
+                      key={r.patient._id}
+                      patientName={r.patient.name}
+                      requestDate={new Date(
+                        r.createdAt
+                      ).toLocaleDateString()}
                       onAccept={() =>
-                        toast.success(`Accepted request`)
+                        handleAccept(r.patient._id)
                       }
                       onDecline={() =>
-                        toast.error(`Declined request`)
+                        handleDecline(r.patient._id)
                       }
                     />
                   ))
@@ -157,102 +230,55 @@ const DoctorDashboard = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="patients" className="space-y-6">
+          {/* PATIENTS */}
+          <TabsContent value="patients">
             <Card>
               <CardHeader>
                 <CardTitle>My Patients</CardTitle>
-                <CardDescription>
-                  View and manage your connected patients
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {loading ? (
-                    <p className="text-muted-foreground">Loading patients...</p>
-                  ) : patients.length === 0 ? (
-                    <p className="text-muted-foreground">No patients connected yet.</p>
-                  ) : (
-                    patients.map((patient) => (
-                      <Card
-                        key={patient._id}
-                        className="hover:shadow-elevated transition-all"
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-12 w-12">
-                                <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-white">
-                                  {patient.name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <h4 className="font-semibold">{patient.name}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  Last visit: {patient.lastVisit ? new Date(patient.lastVisit).toLocaleDateString() : "N/A"}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                                  <FileText className="h-3 w-3" />
-                                  {patient.recordsCount || 0} medical records
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => navigate(`/patient/${patient._id}`)}
-                              >
-                                View Records
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => navigate(`/chat/${patient._id}`)}
-                              >
-                                Message
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="records" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Patient Records</CardTitle>
-                <CardDescription>
-                  View recently shared medical documents
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {loading ? (
-                  <p className="text-muted-foreground">Loading records...</p>
-                ) : records.length === 0 ? (
-                  <p className="text-muted-foreground">No shared records yet.</p>
+                {patients.length === 0 ? (
+                  <p>No connected patients</p>
                 ) : (
-                  records.map((record) => (
-                    <div key={record._id} className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Shared by {record.patientName || "Patient"}
-                      </p>
-                      <MedicalRecordCard
-                        {...record}
-                        onView={() =>
-                          toast.info(`Viewing ${record.fileName}`)
-                        }
-                        onDownload={() =>
-                          toast.success(`Downloading ${record.fileName}`)
-                        }
-                      />
-                    </div>
+                  patients.map(({ patient }) => (
+                    <Card key={patient._id}>
+                      <CardContent className="p-4 flex justify-between items-center">
+                        <div className="flex gap-3 items-center">
+                          <Avatar>
+                            <AvatarFallback>
+                              {patient.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-semibold">
+                            {patient.name}
+                          </span>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              navigate(`/chat/${patient._id}`)
+                            }
+                          >
+                            Chat
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() =>
+                              handleRemovePatient(patient._id)
+                            }
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
                   ))
                 )}
               </CardContent>
@@ -260,6 +286,18 @@ const DoctorDashboard = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* REAL-TIME POPUPS */}
+      {notifications.map((n, i) => (
+        <FollowRequestPopup
+          key={i}
+          type={n.type}
+          patientName={n.payload?.patientName}
+          onAccept={() => handleAccept(n.payload.patientId)}
+          onDecline={() => handleDecline(n.payload.patientId)}
+          onClose={() => removeNotification(i)}
+        />
+      ))}
     </div>
   );
 };

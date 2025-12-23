@@ -7,7 +7,8 @@ const { sendSMS } = require("../utils/smsConfig");
 const { generateOtp } = require("../utils/otp");
 
 const updateDoctorProfileOtpRequest = async (req, res) => {
-  const doctorId = req.user.id;
+  const doctorId = req.user._id;
+  console.log("Initiating profile update for doctor:", doctorId);
   let lockKey = null;
 
   try {
@@ -90,6 +91,7 @@ const updateDoctorProfileOtpRequest = async (req, res) => {
 
     const otp = generateOtp();
     const otpKey = `otp:profileUpdate:${doctorId}`;
+    console.log("Generated OTP:", otp);
 
     await redis.set(
       otpKey,

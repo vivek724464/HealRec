@@ -164,6 +164,7 @@ const verifyRegisterOtp = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { username, password } = req.body;
+    console.log(username,password);
     if (!username || !password) {
       return res.status(400).json({
         success: false,
@@ -174,6 +175,7 @@ const login = async (req, res) => {
     const user =
       (await Doctor.findOne({ username: cleanUsername })) ||
       (await Patient.findOne({ username: cleanUsername }));
+      console.log(user);
 
     if (!user) {
       return res.status(404).json({

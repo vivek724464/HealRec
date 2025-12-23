@@ -1,4 +1,5 @@
 const path = require("path");
+const cors = require("cors");
 require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 const express = require("express");
 const http = require("http");
@@ -25,6 +26,12 @@ if (!JWT_SECRET) {
 }
 connectDB(MONGO_URI);
 const app = express();
+app.use(
+  cors({
+    origin: "http://localhost:8080",
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use("/HealRec/messages", messagesRouter);
 const server = http.createServer(app);
@@ -39,8 +46,6 @@ server.on("upgrade", (req, socket, head) => {
       socket.destroy();
       return;
     }
-
-
     req.token = token;
 
     wss.handleUpgrade(req, socket, head, (ws) => {
@@ -61,55 +66,40 @@ initWs(wss, { jwtSecret: JWT_SECRET });
     console.log("Connected to RabbitMQ. Listening for follow events...");
 
     await subscribe(
-      RABBIT_URL,
-      EVENTS.CHAT_QUEUE,
-      EVENTS.ROUTING_KEYS_ARRAY,
-      async (payload, routingKey) => {
-        console.log("Received:", routingKey, payload);
+  RABBIT_URL,
+  EVENTS.CHAT_QUEUE,
+  EVENTS.ROUTING_KEYS_ARRAY,
+  async (payload, routingKey) => {
+    const { doctorId, patientId } = payload;
+    if (!doctorId || !patientId) return;
 
-        const { doctorId, patientId } = payload || {};
-        if (!doctorId || !patientId) return;
+    if (routingKey === EVENTS.ROUTING_KEYS_OBJ.FOLLOW_ACCEPTED) {
+      await AllowedPair.updateOne(
+        { doctorId, patientId },
+        { $set: { active: true, createdAt: new Date() } },
+        { upsert: true }
+      );
+      console.log(`Allowed pair created: Doctor ${doctorId} <-> Patient ${patientId}`);
+      return;
+    }
 
-
-        if (routingKey === EVENTS.ROUTING_KEYS_OBJ.FOLLOW_ACCEPTED) {
-
-          await AllowedPair.updateOne(
-            { doctorId, patientId },
-            {
-              $set: {
-                doctorId,
-                patientId,
-                active: true,
-                createdAt: new Date(),
-              },
-            },
-            { upsert: true }
-          );
-
-          console.log(`AllowedPair CREATED: ${doctorId} <-> ${patientId}`);
-
-        } else if (routingKey === EVENTS.ROUTING_KEYS_OBJ.FOLLOW_REVOKED) {
-
-          await AllowedPair.updateOne(
-            { doctorId, patientId },
-            { $set: { active: false } }
-          );
-
-          console.log(`AllowedPair REVOKED: ${doctorId} <-> ${patientId}`);
-
-        } else if (routingKey === EVENTS.ROUTING_KEYS_OBJ.FOLLOW_REQUESTED) {
-
-          console.log(
-            `Follow request received → no DB changes: ${doctorId} <-> ${patientId}`
-          );
-
-        } else {
-
-          console.log("Unknown routing key:", routingKey);
-
-        }
-      }
-    );
+    if (
+      routingKey === EVENTS.ROUTING_KEYS_OBJ.FOLLOW_UNFOLLOWED ||
+      routingKey === EVENTS.ROUTING_KEYS_OBJ.FOLLOW_REVOKED
+    ) {
+      await AllowedPair.updateOne(
+        { doctorId, patientId },
+        { $set: { active: false } }
+      );
+      await Message.deleteMany({
+        $or: [
+          { senderId: doctorId, receiverId: patientId },
+          { senderId: patientId, receiverId: doctorId },
+        ],
+      });
+    }
+  }
+);
 
   } catch (err) {
     console.log("Rabbit error");

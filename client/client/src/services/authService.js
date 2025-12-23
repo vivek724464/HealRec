@@ -25,23 +25,16 @@ export const authService = {
       password,
     });
 
+    if (!response.data?.success) {
+      throw new Error(response.data?.message || 'Login failed');
+    }
+
     const { token, user } = response.data;
 
-    // ✅ SAVE TOKEN
     localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
 
-    // ✅ SAVE FULL USER OBJECT (THIS FIXES YOUR ISSUE)
-    localStorage.setItem(
-      'user',
-      JSON.stringify({
-        id: user._id,
-        name: user.name,
-        role: user.role,
-        email: user.email,
-      })
-    );
-
-    return response.data;
+    return user;
   },
 
   logout: () => {

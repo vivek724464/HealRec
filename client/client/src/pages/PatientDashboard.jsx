@@ -1,36 +1,41 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+
 import Navigation from "@/components/Navigation";
 import FileUploadCard from "@/components/FileUploadCard";
 import MedicalRecordViewer from "@/components/MedicalRecordViewer";
 import DoctorCard from "@/components/DoctorCard";
 import MedicalRecordCard from "@/components/MedicalRecordCard";
+import PatientFollowPopup from "@/components/PatientFollowPopup";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Users, Upload, Search } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { Search } from "lucide-react";
+
 import { dataService } from "@/services/dataService";
 import { authService } from "@/services/authService";
+import { useNotifications } from "@/context/NotificationContext";
 
 const PatientDashboard = () => {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
   const patientId = user?.id;
 
+  const { notifications, removeNotification } = useNotifications();
+
   const [doctors, setDoctors] = useState([]);
   const [records, setRecords] = useState([]);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-
   const [viewRecord, setViewRecord] = useState(null);
 
   /* ================= INITIAL LOAD ================= */
@@ -39,20 +44,52 @@ const PatientDashboard = () => {
 
     const fetchData = async () => {
       try {
-        const [doctorsRes, recordsRes] = await Promise.all([
+        const [docsRes, recRes] = await Promise.all([
           dataService.getFollowingDoctors(),
           dataService.getReports(patientId),
         ]);
 
-        setDoctors(doctorsRes.data || []);
-        setRecords(recordsRes.data || []);
+        setDoctors(docsRes.data || []);
+        setRecords(recRes.data || []);
       } catch {
-        toast.error("Failed to load dashboard data");
+        toast.error("Failed to load dashboard");
       }
     };
 
     fetchData();
   }, [patientId]);
+
+  /* ================= REAL-TIME NOTIFICATIONS ================= */
+  useEffect(() => {
+    notifications.forEach((n) => {
+      const doctorId = n.payload?.doctorId;
+      if (!doctorId) return;
+
+      // ✅ Doctor accepted request
+      if (n.type === "FOLLOW_ACCEPTED") {
+        setDoctors((prev) =>
+          prev.map((d) =>
+            d._id === doctorId
+              ? { ...d, connectionStatus: "connected" }
+              : d
+          )
+        );
+      }
+
+      // ❌ Doctor declined request
+      if (n.type === "FOLLOW_DECLINED") {
+        setDoctors((prev) =>
+          prev.filter((d) => d._id !== doctorId)
+        );
+      }
+      // ❌ Doctor removed patient
+      if (n.type === "REMOVED_BY_DOCTOR") {
+        setDoctors((prev) =>
+          prev.filter((d) => d._id !== doctorId)
+        );
+      } 
+    });
+  }, [notifications]);
 
   /* ================= SEARCH ================= */
   useEffect(() => {
@@ -66,14 +103,13 @@ const PatientDashboard = () => {
         setSearching(true);
         const res = await dataService.searchDoctors(searchQuery);
 
-        // ❌ REMOVE doctors already in Doctors tab from search
-        const filtered = (res.data || []).filter(
-          (doc) => !doctors.some((d) => d._id === doc._id)
+        setSearchResults(
+          res.data.filter(
+            (d) => !doctors.some((x) => x._id === d._id)
+          )
         );
-
-        setSearchResults(filtered);
-      } catch (err) {
-        toast.error(err.response?.data?.message || "Doctor search failed");
+      } catch {
+        toast.error("Search failed");
       } finally {
         setSearching(false);
       }
@@ -82,34 +118,14 @@ const PatientDashboard = () => {
     return () => clearTimeout(timer);
   }, [searchQuery, doctors]);
 
-  /* ================= STATS ================= */
-  const stats = [
-    { title: "Total Records", value: records.length, icon: FileText },
-    {
-      title: "Connected Doctors",
-      value: doctors.filter((d) => d.connectionStatus === "connected").length,
-      icon: Users,
-    },
-    {
-      title: "Recent Uploads",
-      value: records.filter(
-        (r) =>
-          new Date(r.uploadedAt) >
-          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      ).length,
-      icon: Upload,
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-background">
-      <Navigation userRole="patient" userName={user?.name || "Patient"} />
+      <Navigation userRole="patient" userName={user?.name} />
 
       <main className="container mx-auto px-4 py-8">
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row md:justify-between gap-4 mb-8">
+        <div className="flex flex-col md:flex-row justify-between mb-8">
           <h1 className="text-4xl font-bold">
-            Welcome back, {user?.name || "Patient"} 👋
+            Welcome back, {user?.name} 👋
           </h1>
 
           <div className="relative w-full md:w-96">
@@ -132,44 +148,28 @@ const PatientDashboard = () => {
                 Doctors matching “{searchQuery}”
               </CardDescription>
             </CardHeader>
-
-            <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <CardContent className="grid md:grid-cols-3 gap-4">
               {searching ? (
                 <p>Searching...</p>
-              ) : searchResults.length === 0 ? (
-                <p className="text-muted-foreground">No doctors found.</p>
               ) : (
                 searchResults.map((doc) => (
                   <DoctorCard
                     key={doc._id}
-                    name={doc.name}
-                    specialty={doc.specialization}
-                    experience={
-                      doc.experience
-                        ? `${doc.experience} years`
-                        : "Not specified"
-                    }
-                    rating={doc.rating}
-                    connectionStatus={doc.connectionStatus}
-                    onConnect={
-                      doc.connectionStatus === "none"
-                        ? async () => {
-                            await dataService.sendFollowRequest(doc._id);
-                            toast.success("Follow request sent");
+                    {...doc}
+                    connectionStatus="none"
+                    onConnect={async () => {
+                      await dataService.sendFollowRequest(doc._id);
+                      toast.success("Follow request sent");
 
-                            // 🔥 REMOVE FROM SEARCH
-                            setSearchResults((prev) =>
-                              prev.filter((d) => d._id !== doc._id)
-                            );
+                      setSearchResults((prev) =>
+                        prev.filter((d) => d._id !== doc._id)
+                      );
 
-                            // 🔥 ADD TO DOCTORS TAB
-                            setDoctors((prev) => [
-                              ...prev,
-                              { ...doc, connectionStatus: "pending" },
-                            ]);
-                          }
-                        : undefined
-                    }
+                      setDoctors((prev) => [
+                        ...prev,
+                        { ...doc, connectionStatus: "pending" },
+                      ]);
+                    }}
                   />
                 ))
               )}
@@ -177,47 +177,32 @@ const PatientDashboard = () => {
           </Card>
         )}
 
-        {/* STATS */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          {stats.map((stat) => (
-            <Card key={stat.title}>
-              <CardContent className="p-6 flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-muted-foreground">{stat.title}</p>
-                  <p className="text-3xl font-bold">{stat.value}</p>
-                </div>
-                <stat.icon className="h-8 w-8 text-primary" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* TABS */}
-        <Tabs defaultValue="upload">
+        <Tabs defaultValue="doctors">
           <TabsList className="grid grid-cols-3">
             <TabsTrigger value="upload">Upload</TabsTrigger>
-            <TabsTrigger value="records">My Records</TabsTrigger>
+            <TabsTrigger value="records">Records</TabsTrigger>
             <TabsTrigger value="doctors">Doctors</TabsTrigger>
           </TabsList>
 
           <TabsContent value="upload">
-            <FileUploadCard onUploadSuccess={() => window.location.reload()} />
+            <FileUploadCard />
           </TabsContent>
 
           <TabsContent value="records">
             <Card>
               <CardHeader>
-                <CardTitle>My Medical Records</CardTitle>
+                <CardTitle>My Records</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {records.map((r, i) => (
+                {records.map((r) => (
                   <MedicalRecordCard
-                    key={i}
+                    key={r._id}
                     fileName={r.fileName}
-                    fileType={r.fileType?.split("/").pop()}
-                    uploadDate={new Date(r.uploadedAt).toLocaleDateString()}
+                    uploadDate={new Date(
+                      r.uploadedAt
+                    ).toLocaleDateString()}
                     onView={() => setViewRecord(r)}
-                    onDownload={() => window.open(r.url, "_blank")}
+                    onDownload={() => window.open(r.url)}
                   />
                 ))}
               </CardContent>
@@ -229,43 +214,28 @@ const PatientDashboard = () => {
               <CardHeader>
                 <CardTitle>My Doctors</CardTitle>
               </CardHeader>
-              <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <CardContent className="grid md:grid-cols-3 gap-4">
                 {doctors.map((doc) => (
                   <DoctorCard
                     key={doc._id}
-                    name={doc.name}
-                    specialty={doc.specialization}
-                    experience={
-                      doc.experience
-                        ? `${doc.experience} years`
-                        : "Not specified"
-                    }
-                    rating={doc.rating}
-                    connectionStatus={doc.connectionStatus}
+                    {...doc}
                     onMessage={
                       doc.connectionStatus === "connected"
                         ? () => navigate(`/chat/${doc._id}`)
                         : undefined
                     }
-                    onUnfollow={
-                      doc.connectionStatus === "pending"
-                        ? async () => {
-                            await dataService.sendUnfollowRequest(doc._id);
-                            toast.success("Follow request cancelled");
+                    onUnfollow={async () => {
+                      await dataService.sendUnfollowRequest(doc._id);
+                      toast.success(
+                        doc.connectionStatus === "pending"
+                          ? "Request cancelled"
+                          : "Unfollowed"
+                      );
 
-                            // 🔥 REMOVE FROM DOCTORS
-                            setDoctors((prev) =>
-                              prev.filter((d) => d._id !== doc._id)
-                            );
-
-                            // 🔥 RESTORE SEARCH RESULT AS FOLLOW
-                            setSearchResults((prev) => [
-                              { ...doc, connectionStatus: "none" },
-                              ...prev,
-                            ]);
-                          }
-                        : undefined
-                    }
+                      setDoctors((prev) =>
+                        prev.filter((d) => d._id !== doc._id)
+                      );
+                    }}
                   />
                 ))}
               </CardContent>
@@ -273,6 +243,25 @@ const PatientDashboard = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* 🔔 PATIENT POPUPS */}
+      {notifications.map((n, i) => {
+        if (
+          n.type === "FOLLOW_ACCEPTED" ||
+          n.type === "FOLLOW_DECLINED" ||
+          n.type === "REMOVED_BY_DOCTOR"
+        ) {
+          return (
+            <PatientFollowPopup
+              key={i}
+              type={n.type}
+              doctorName={n.payload.doctorName}
+              onClose={() => removeNotification(i)}
+            />
+          );
+        }
+        return null;
+      })}
 
       <MedicalRecordViewer
         open={!!viewRecord}

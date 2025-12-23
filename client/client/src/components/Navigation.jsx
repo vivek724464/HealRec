@@ -14,12 +14,28 @@ import { Badge } from "@/components/ui/badge";
 import { authService } from "@/services/authService";
 import { toast } from "sonner";
 
-const Navigation = ({ userRole, userName, notificationCount = 0 }) => {
+const Navigation = ({ notificationCount = 0 }) => {
   const navigate = useNavigate();
+
   const user = authService.getCurrentUser();
-  const displayName = userName || user?.name || "User";
-  const displayRole = userRole || user?.role || "patient";
-  const dashboardPath = displayRole === "doctor" ? "/doctor-dashboard" : "/patient-dashboard";
+
+  // 🔐 Not logged in → hide navbar
+  if (!user) return null;
+
+  const displayName = user.name || "User";
+  const displayRole = user.role || "patient";
+
+  // ✅ Dashboards
+  const dashboardPath =
+    displayRole === "doctor"
+      ? "/doctor/dashboard"
+      : "/patient/dashboard";
+
+  // ✅ Profiles
+  const profilePath =
+    displayRole === "doctor"
+      ? "/doctor/profile"
+      : "/patient/profile";
 
   const handleLogout = () => {
     authService.logout();
@@ -31,6 +47,7 @@ const Navigation = ({ userRole, userName, notificationCount = 0 }) => {
     <nav className="bg-card border-b border-border shadow-soft sticky top-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
+          {/* Logo */}
           <Link to={dashboardPath} className="flex items-center space-x-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <span className="text-white font-bold text-xl">H</span>
@@ -40,13 +57,16 @@ const Navigation = ({ userRole, userName, notificationCount = 0 }) => {
             </span>
           </Link>
 
+          {/* Actions */}
           <div className="flex items-center space-x-4">
+            {/* Chat */}
             <Link to="/chat">
-              <Button variant="ghost" size="icon" className="relative">
+              <Button variant="ghost" size="icon">
                 <MessageSquare className="h-5 w-5" />
               </Button>
             </Link>
 
+            {/* Notifications */}
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
               {notificationCount > 0 && (
@@ -56,6 +76,7 @@ const Navigation = ({ userRole, userName, notificationCount = 0 }) => {
               )}
             </Button>
 
+            {/* Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -69,6 +90,7 @@ const Navigation = ({ userRole, userName, notificationCount = 0 }) => {
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
+
               <DropdownMenuContent className="w-56" align="end">
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
@@ -78,15 +100,24 @@ const Navigation = ({ userRole, userName, notificationCount = 0 }) => {
                     </p>
                   </div>
                 </DropdownMenuLabel>
+
                 <DropdownMenuSeparator />
+
+                {/* Profile */}
                 <DropdownMenuItem asChild>
-                  <Link to="/profile" className="cursor-pointer">
+                  <Link to={profilePath} className="flex items-center">
                     <User className="mr-2 h-4 w-4" />
                     Profile
                   </Link>
                 </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="cursor-pointer text-destructive" onClick={handleLogout}>
+
+                {/* Logout */}
+                <DropdownMenuItem
+                  className="cursor-pointer text-destructive"
+                  onClick={handleLogout}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   Logout
                 </DropdownMenuItem>

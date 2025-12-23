@@ -7,13 +7,14 @@ const { sendFollowRequest,
     declineFollowRequest,
     getPendingFollowRequests,
     getDoctorFollowers,
-    getFollowingDoctors } = require("../controllers/followController");
+    getFollowingDoctors, removePatient } = require("../controllers/followController");
 const {isLoggedIn, isPatient, isDoctor}=require("../middleware/authmiddleware");
 
 router.post("/follow-request", isLoggedIn, isPatient, sendFollowRequest);
 router.post("/accept-request", isLoggedIn, isDoctor, acceptFollowRequest);
 router.post("/decline-request", isLoggedIn, isDoctor, declineFollowRequest);
 router.post("/unfollow-request", isLoggedIn, isPatient, sendUnfollowRequest);
+router.post("/remove-patient", isLoggedIn, isDoctor, removePatient);
 
 router.get("/get-Pending-requests", isLoggedIn, isDoctor, getPendingFollowRequests);
 router.get("/get-followed-doctors", isLoggedIn, isPatient, getFollowingDoctors);

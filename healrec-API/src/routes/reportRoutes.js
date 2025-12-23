@@ -3,7 +3,7 @@ const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../config/cloudinary");
 const { uploadReport, getReports } = require("../controllers/reportController");
-const { isLoggedIn, isPatient } = require("../middleware/authmiddleware");
+const { isLoggedIn, isPatient, isDoctor } = require("../middleware/authmiddleware");
 
 const router = express.Router();
 
@@ -27,5 +27,9 @@ router.post(
 );
 
 router.get("/:patientId", isLoggedIn, isPatient, getReports);
+
+router.get("/shared-with-me", isLoggedIn, isDoctor, (req, res) => {
+  return res.json({ records: [] });
+});
 
 module.exports = router;

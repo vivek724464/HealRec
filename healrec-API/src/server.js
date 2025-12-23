@@ -2,13 +2,15 @@ const express = require("express");
 const dotenv = require("dotenv");
 const path = require("path");
 const connectDB = require("./config/db");
-const cors = require("cors")
+const cors = require("cors");
+const http = require("http");
+const { initWebSocket } = require("./websocket/wsServer");
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-// Allow common local dev ports including 8080 (Vite sometimes uses 8080)
+
 const ALLOWED_ORIGINS = [
   FRONTEND_URL,
   "http://localhost:3000",
@@ -17,6 +19,7 @@ const ALLOWED_ORIGINS = [
   "http://localhost:8081",
   "http://192.168.56.1:8080",
 ];
+
 app.use(
   cors({
     origin: function (origin, cb) {
@@ -30,6 +33,7 @@ app.use(
     preflightContinue: false,
   })
 );
+
 connectDB();
 
 app.use(express.json());
@@ -38,16 +42,16 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const userRouter = require("./routes/userRoutes");
 const reportRouter = require("./routes/reportRoutes");
-const followRouter=require("./routes/followRoutes");
-const docRouter=require("./routes/docRoutes");
-const patientRouter=require("./routes/patientRoutes");
-
+const followRouter = require("./routes/followRoutes");
+const docRouter = require("./routes/docRoutes");
+const patientRouter = require("./routes/patientRoutes");
+const notificationRouter = require("./routes/notificationRoutes");
 app.use("/HealRec/users", userRouter);
 app.use("/HealRec/reports", reportRouter);
 app.use("/HealRec/followers", followRouter);
-app.use("/HealRec/doctor",docRouter);
+app.use("/HealRec/doctor", docRouter);
 app.use("/HealRec/patient", patientRouter);
-
+app.use("/HealRec/notifications", notificationRouter);
 
 app.get("/", (req, res) => {
   res.send("Welcome to HealRec API");
@@ -65,4 +69,10 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const server = http.createServer(app);
+
+initWebSocket(server);
+
+server.listen(PORT, () =>
+  console.log(`Server + WebSocket running on port ${PORT}`)
+);

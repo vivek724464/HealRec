@@ -15,6 +15,7 @@ import { authService } from "@/services/authService";
 
 const Login = () => {
   const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -32,25 +33,29 @@ const Login = () => {
     try {
       setLoading(true);
 
-      // 🔥 authService.login already saves token + user correctly
-      const response = await authService.login(
+      // ✅ authService.login RETURNS USER (not { user })
+      const user = await authService.login(
         formData.username,
         formData.password
       );
 
+      if (!user || !user.role) {
+        throw new Error("Invalid user data");
+      }
+
       toast.success("Login successful!");
 
-      // ✅ USE USER RETURNED BY BACKEND
-      const role = response.user.role;
-
+      // ✅ role-based navigation
       navigate(
-        role === "doctor"
+        user.role === "doctor"
           ? "/doctor/dashboard"
           : "/patient/dashboard"
       );
     } catch (error) {
       console.error("Login error:", error);
-      toast.error(error.response?.data?.message || "Login failed");
+      toast.error(
+        error.response?.data?.message || error.message || "Login failed"
+      );
     } finally {
       setLoading(false);
     }
@@ -67,6 +72,7 @@ const Login = () => {
             Sign in to your account to continue
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -79,8 +85,8 @@ const Login = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, username: e.target.value })
                 }
-                required
                 disabled={loading}
+                required
               />
             </div>
 
@@ -94,8 +100,8 @@ const Login = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
-                required
                 disabled={loading}
+                required
               />
             </div>
 
