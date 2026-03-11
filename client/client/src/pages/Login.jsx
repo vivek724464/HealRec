@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,9 @@ const Login = () => {
     username: "",
     password: "",
   });
+
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // ✅ NEW STATE
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,24 +36,22 @@ const Login = () => {
     try {
       setLoading(true);
 
-      // ✅ authService.login RETURNS USER (not { user })
-      const user = await authService.login(
-        formData.username,
-        formData.password
-      );
+      const response = await authService.login(
+  formData.username,
+  formData.password
+);
 
-      if (!user || !user.role) {
-        throw new Error("Invalid user data");
-      }
+if (!response || !response.role) {
+  throw new Error("Invalid user data");
+}
 
-      toast.success("Login successful!");
+toast.success("Login successful!");
 
-      // ✅ role-based navigation
-      navigate(
-        user.role === "doctor"
-          ? "/doctor/dashboard"
-          : "/patient/dashboard"
-      );
+navigate(
+  response.role === "doctor"
+    ? "/doctor/dashboard"
+    : "/patient/dashboard"
+);
     } catch (error) {
       console.error("Login error:", error);
       toast.error(
@@ -75,6 +76,7 @@ const Login = () => {
 
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Username */}
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
               <Input
@@ -90,11 +92,13 @@ const Login = () => {
               />
             </div>
 
-            <div className="space-y-2">
+            {/* Password */}
+            <div className="space-y-2 relative">
               <Label htmlFor="password">Password</Label>
+
               <Input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"} // ✅ TOGGLE
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) =>
@@ -102,7 +106,20 @@ const Login = () => {
                 }
                 disabled={loading}
                 required
+                className="pr-10"
               />
+
+              {/* Eye Icon */}
+              <div
+                className="absolute right-3 top-9 cursor-pointer text-muted-foreground hover:text-primary"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff size={18} />
+                ) : (
+                  <Eye size={18} />
+                )}
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>

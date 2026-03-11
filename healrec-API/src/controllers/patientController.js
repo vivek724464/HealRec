@@ -8,7 +8,7 @@ const { sendSMS } = require("../utils/smsConfig");
 const { generateOtp } = require("../utils/otp");
 
 const updatePatientProfileOtpRequest = async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   let lockKey = null;
 
   try {
@@ -85,7 +85,7 @@ const updatePatientProfileOtpRequest = async (req, res) => {
   }
 };
 const verifyPatientProfileUpdateRequestOtp = async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   const { otp } = req.body;
 
   if (!otp) {

@@ -26,7 +26,7 @@ const PatientProfile = () => {
 
   /* ================= LOAD PROFILE ================= */
   useEffect(() => {
-    profileService
+    dataService
       .getPatientProfile()
       .then((user) => {
         if (!user) return;
@@ -49,7 +49,7 @@ const PatientProfile = () => {
   const handleUpdate = async () => {
     try {
       setLoading(true);
-      const res = await profileService.updatePatientProfile(form);
+      const res = await dataService.updatePatientProfile(form);
 
       if (res.success && res.message.includes("OTP")) {
         setOtpSent(true);
@@ -69,7 +69,7 @@ const PatientProfile = () => {
   /* ================= VERIFY OTP ================= */
   const handleVerifyOtp = async () => {
     try {
-      const res = await profileService.verifyPatientProfileOtp(otp);
+      const res = await dataService.verifyPatientProfileOtp(otp);
       if (res.success) {
         toast.success("Profile updated successfully");
         setOtpSent(false);

@@ -1,7 +1,13 @@
 const Doctor = require("../models/docSchema");
 const Patient = require("../models/patientSchema");
-const{publishFollowAccepted, publishFollowRevoked, publishFollowUnfollowed}= require("../config/rabbitUtil");
+const{
+  publishFollowAccepted,
+  publishFollowRevoked,
+  publishFollowUnfollowed,
+  publishFollowRequest,
+} = require("../config/rabbitUtil");
 const { notifyUser } = require("../websocket/wsServer");
+const { logPatientAccess } = require("../utils/auditLogger");
 
 
 const sendFollowRequest = async (req, res) => {
@@ -50,17 +56,24 @@ const sendFollowRequest = async (req, res) => {
     await doctor.save();
     await patient.save();
 
-  await notifyUser(
-  doctorId,
-  "doctor",
-  "FOLLOW_REQUEST",
-  {
-    patientId: patient._id,
-    patientName: patient.name,
-    email: patient.email || "",
-    address: patient.address || "Not provided",
-  }
-);
+    // publish an event so ChatService can push a real-time notification
+    await publishFollowRequest(doctorId.toString(), patientId.toString(), {
+      patientName: patient.name,
+      doctorName: doctor.name,
+    });
+
+    // also write a stored notification (optional, useful if patient later connects to healrec-API WS)
+    await notifyUser(
+      doctorId,
+      "doctor",
+      "FOLLOW_REQUEST",
+      {
+        patientId: patient._id,
+        patientName: patient.name,
+        email: patient.email || "",
+        address: patient.address || "Not provided",
+      }
+    );
 
     return res.json({
       success: true,
@@ -143,7 +156,10 @@ const sendUnfollowRequest = async (req, res) => {
       await doctor.save();
       await patient.save();
 
-    await publishFollowUnfollowed(doctorId, patientId);
+    await publishFollowUnfollowed(doctorId, patientId, {
+      patientName: patient.name,
+      doctorName: doctor.name,
+    });
 
       await notifyUser(doctorId, "doctor", "FOLLOW_UNFOLLOWED", {
         patientId: patient._id.toString(),
@@ -164,14 +180,13 @@ const sendUnfollowRequest = async (req, res) => {
   }
 };
 
-
 const acceptFollowRequest = async (req, res) => {
   try {
     const doctorId = req.user._id;
     const { patientId } = req.body;
 
     if (!patientId) {
-      return res.json({
+      return res.status(400).json({
         success: false,
         message: "patientId is required",
       });
@@ -181,7 +196,7 @@ const acceptFollowRequest = async (req, res) => {
     const patient = await Patient.findById(patientId);
 
     if (!doctor || !patient) {
-      return res.json({
+      return res.status(404).json({
         success: false,
         message: "Doctor or Patient not found",
       });
@@ -191,19 +206,13 @@ const acceptFollowRequest = async (req, res) => {
       (r) => r.patient.toString() === patientId.toString()
     );
 
-    if (!request) {
-      return res.json({
+    if (!request || request.status !== "pending") {
+      return res.status(400).json({
         success: false,
-        message: "No follow request found from this patient",
+        message: "Invalid follow request",
       });
     }
 
-    if (request.status !== "pending") {
-      return res.json({
-        success: false,
-        message: `Request already ${request.status}`,
-      });
-    }
     request.status = "accepted";
 
     const patientFollow = patient.followingDoctors.find(
@@ -212,16 +221,22 @@ const acceptFollowRequest = async (req, res) => {
 
     if (patientFollow) {
       patientFollow.status = "accepted";
-    } else {
-      patient.followingDoctors.push({
-        doctor: doctorId,
-        status: "accepted",
-      });
     }
 
     await doctor.save();
     await patient.save();
-    await publishFollowAccepted(doctorId, patientId);
+
+    // 🔥 ONLY PUBLISH EVENT
+    await publishFollowAccepted(
+      doctorId.toString(),
+      patientId.toString(),
+      {
+        doctorName: doctor.name,
+        patientName: patient.name,
+      }
+    );
+
+    // notify patient in realtime so their dashboard updates without refresh
     await notifyUser(patientId, "patient", "FOLLOW_ACCEPTED", {
       doctorId: doctor._id.toString(),
       doctorName: doctor.name,
@@ -231,15 +246,15 @@ const acceptFollowRequest = async (req, res) => {
       success: true,
       message: "Follow request accepted successfully",
     });
+
   } catch (error) {
     console.error("Accept follow error:", error);
-    return res.json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
-
 
 const declineFollowRequest = async (req, res) => {
   try {
@@ -357,7 +372,10 @@ const removePatient = async (req, res) => {
 
     await doctor.save();
     await patient.save();
-    await publishFollowRevoked(doctorId, patientId);
+    await publishFollowRevoked(doctorId, patientId, {
+      doctorName: doctor.name,
+      patientName: patient.name,
+    });
     await notifyUser(patientId, "patient", "REMOVED_BY_DOCTOR", {
       doctorId: doctor._id.toString(),
       doctorName: doctor.name,
@@ -405,6 +423,22 @@ const getDoctorFollowers = async (req, res) => {
         const doctor = await Doctor.findById(doctorId).populate("followRequests.patient", "name email patientInfo");
 
         const accepted = doctor.followRequests.filter(r => r.status === "accepted");
+
+        await Promise.all(
+          accepted.map((entry) => {
+            const patient = entry?.patient;
+            if (!patient?._id) return Promise.resolve();
+            return logPatientAccess({
+              patientId: patient._id,
+              actor: req.user,
+              action: "VIEW_PATIENT_CONNECTION",
+              resourceType: "patient_connection",
+              resourceId: patient._id.toString(),
+              req,
+              details: { endpoint: "GET /HealRec/followers/get-followers" },
+            });
+          })
+        );
 
         return res.json({
             success: true,

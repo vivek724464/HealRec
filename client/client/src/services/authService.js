@@ -1,8 +1,12 @@
-import api from '@/lib/api';
+import api from "@/lib/api";
+
+const emitAuthChanged = () => {
+  window.dispatchEvent(new Event("healrec-auth-changed"));
+};
 
 export const authService = {
   requestSignupOtp: async (identifier, name, password, role) => {
-    const response = await api.post('/users/signup', {
+    const response = await api.post("/users/signup", {
       identifier,
       name,
       password,
@@ -12,7 +16,7 @@ export const authService = {
   },
 
   verifySignupOtp: async (identifier, otp) => {
-    const response = await api.post('/users/verify-otp', {
+    const response = await api.post("/users/verify-otp", {
       identifier,
       otp,
     });
@@ -20,30 +24,40 @@ export const authService = {
   },
 
   login: async (username, password) => {
-    const response = await api.post('/users/login', {
+    const response = await api.post("/users/login", {
       username,
       password,
     });
 
     if (!response.data?.success) {
-      throw new Error(response.data?.message || 'Login failed');
+      throw new Error(response.data?.message || "Login failed");
     }
 
     const { token, user } = response.data;
 
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
+    authService.setSession(token, user);
 
     return user;
   },
 
+  setSession: (token, user) => {
+    if (token) {
+      localStorage.setItem("token", token);
+    }
+    if (user) {
+      localStorage.setItem("user", JSON.stringify(user));
+    }
+    emitAuthChanged();
+  },
+
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    emitAuthChanged();
   },
 
   getCurrentUser: () => {
-    const user = localStorage.getItem('user');
+    const user = localStorage.getItem("user");
     if (!user) return null;
     try {
       return JSON.parse(user);
@@ -53,6 +67,6 @@ export const authService = {
   },
 
   getToken: () => {
-    return localStorage.getItem('token');
+    return localStorage.getItem("token");
   },
 };

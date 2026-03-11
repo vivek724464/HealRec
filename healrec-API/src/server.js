@@ -73,6 +73,17 @@ const server = http.createServer(app);
 
 initWebSocket(server);
 
-server.listen(PORT, () =>
-  console.log(`Server + WebSocket running on port ${PORT}`)
-);
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(
+      `Port ${PORT} is already in use. Stop the running process or change PORT in healrec-API/.env.`
+    );
+  } else {
+    console.error("API server startup error:", err);
+  }
+  process.exit(1);
+});
+
+server.listen(PORT, () => {
+  console.log(`Server + WebSocket running on port ${PORT}`);
+});

@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Prefer Vite-provided env var, fall back to hardcoded URL
 export const API_URL =
-  import.meta.env.VITE_HEALREC_API_URL || "http://localhost:5000/HealRec";
+  import.meta.env.VITE_HEALREC_API_URL || "http://localhost:3333/HealRec";
   
 
 const api = axios.create({

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -8,6 +8,7 @@ import MedicalRecordViewer from "@/components/MedicalRecordViewer";
 import DoctorCard from "@/components/DoctorCard";
 import MedicalRecordCard from "@/components/MedicalRecordCard";
 import PatientFollowPopup from "@/components/PatientFollowPopup";
+import MessageNotificationPopup from "@/components/MessageNotificationPopup";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -29,7 +30,8 @@ const PatientDashboard = () => {
   const user = authService.getCurrentUser();
   const patientId = user?.id;
 
-  const { notifications, removeNotification } = useNotifications();
+  const { notifications = [], popups = [], removeNotification, removePopup } =
+    useNotifications() || {};
 
   const [doctors, setDoctors] = useState([]);
   const [records, setRecords] = useState([]);
@@ -37,6 +39,38 @@ const PatientDashboard = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [viewRecord, setViewRecord] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const doctorNameByIdRef = useRef({});
+
+  const resolveDoctorName = (event) => {
+    const payload = event?.payload || {};
+    const fromPayload = payload?.doctorName;
+    if (fromPayload && fromPayload.trim()) return fromPayload;
+
+    const doctorId = payload?.doctorId;
+    if (doctorId && doctorNameByIdRef.current[doctorId]) {
+      return doctorNameByIdRef.current[doctorId];
+    }
+
+    return "Doctor";
+  };
+
+  /* ================= FETCH DOCTORS ================= */
+  const refreshDoctors = async () => {
+    try {
+      const res = await dataService.getFollowingDoctors();
+
+      const doctorsData =
+        res?.data?.data ||
+        res?.data ||
+        [];
+
+      setDoctors(Array.isArray(doctorsData) ? doctorsData : []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   /* ================= INITIAL LOAD ================= */
   useEffect(() => {
@@ -44,52 +78,97 @@ const PatientDashboard = () => {
 
     const fetchData = async () => {
       try {
-        const [docsRes, recRes] = await Promise.all([
+        setAuditLoading(true);
+        const [docsRes, recRes, auditRes] = await Promise.all([
           dataService.getFollowingDoctors(),
           dataService.getReports(patientId),
+          dataService.getAuditLogs(1, 50),
         ]);
 
-        setDoctors(docsRes.data || []);
-        setRecords(recRes.data || []);
-      } catch {
+        const doctorsData =
+          docsRes?.data?.data ||
+          docsRes?.data ||
+          [];
+
+        const recordsData =
+          recRes?.data?.data ||
+          recRes?.data ||
+          [];
+        const auditData =
+          auditRes?.data?.data ||
+          auditRes?.data ||
+          [];
+
+        setDoctors(Array.isArray(doctorsData) ? doctorsData : []);
+        setRecords(Array.isArray(recordsData) ? recordsData : []);
+        setAuditLogs(Array.isArray(auditData) ? auditData : []);
+      } catch (err) {
+        console.error(err);
         toast.error("Failed to load dashboard");
+      } finally {
+        setAuditLoading(false);
       }
     };
 
     fetchData();
   }, [patientId]);
 
-  /* ================= REAL-TIME NOTIFICATIONS ================= */
+  /* ================= REAL-TIME FOLLOW EVENTS ================= */
   useEffect(() => {
-    notifications.forEach((n) => {
-      const doctorId = n.payload?.doctorId;
-      if (!doctorId) return;
+    const map = {};
+    doctors.forEach((doc) => {
+      const id = doc?._id || doc?.doctor?._id;
+      const name = doc?.name || doc?.doctor?.name;
+      if (id && name) map[id] = name;
+    });
+    doctorNameByIdRef.current = {
+      ...doctorNameByIdRef.current,
+      ...map,
+    };
+  }, [doctors]);
 
-      // ✅ Doctor accepted request
+  useEffect(() => {
+    if (!notifications.length) return;
+
+    notifications.forEach((n) => {
+      if (!n?.type) return;
+
+      const { doctorId } = n.payload || {};
+
+      if (n.type === "FOLLOW_REQUEST") {
+        removeNotification(n.id);
+      }
+
       if (n.type === "FOLLOW_ACCEPTED") {
         setDoctors((prev) =>
-          prev.map((d) =>
-            d._id === doctorId
-              ? { ...d, connectionStatus: "connected" }
-              : d
+          prev.map((doc) =>
+            doc.doctor?._id === doctorId || doc._id === doctorId
+              ? { ...doc, status: "accepted", connectionStatus: "connected" }
+              : doc
           )
         );
+        removeNotification(n.id);
       }
 
-      // ❌ Doctor declined request
       if (n.type === "FOLLOW_DECLINED") {
         setDoctors((prev) =>
-          prev.filter((d) => d._id !== doctorId)
+          prev.filter((doc) => doc.doctor?._id !== doctorId && doc._id !== doctorId)
         );
+        removeNotification(n.id);
       }
-      // ❌ Doctor removed patient
-      if (n.type === "REMOVED_BY_DOCTOR") {
+
+      if (
+        n.type === "FOLLOW_UNFOLLOWED" ||
+        n.type === "FOLLOW_REVOKED" ||
+        n.type === "REMOVED_BY_DOCTOR"
+      ) {
         setDoctors((prev) =>
-          prev.filter((d) => d._id !== doctorId)
+          prev.filter((doc) => doc.doctor?._id !== doctorId && doc._id !== doctorId)
         );
-      } 
+        removeNotification(n.id);
+      }
     });
-  }, [notifications]);
+  }, [notifications, removeNotification]);
 
   /* ================= SEARCH ================= */
   useEffect(() => {
@@ -101,14 +180,26 @@ const PatientDashboard = () => {
 
       try {
         setSearching(true);
+
         const res = await dataService.searchDoctors(searchQuery);
 
+        const searchData =
+          res?.data?.data ||
+          res?.data ||
+          [];
+
+        if (!Array.isArray(searchData)) {
+          setSearchResults([]);
+          return;
+        }
+
         setSearchResults(
-          res.data.filter(
+          searchData.filter(
             (d) => !doctors.some((x) => x._id === d._id)
           )
         );
-      } catch {
+      } catch (err) {
+        console.error(err);
         toast.error("Search failed");
       } finally {
         setSearching(false);
@@ -178,10 +269,11 @@ const PatientDashboard = () => {
         )}
 
         <Tabs defaultValue="doctors">
-          <TabsList className="grid grid-cols-3">
+          <TabsList className="grid grid-cols-4">
             <TabsTrigger value="upload">Upload</TabsTrigger>
             <TabsTrigger value="records">Records</TabsTrigger>
             <TabsTrigger value="doctors">Doctors</TabsTrigger>
+            <TabsTrigger value="trust">Trust</TabsTrigger>
           </TabsList>
 
           <TabsContent value="upload">
@@ -194,17 +286,25 @@ const PatientDashboard = () => {
                 <CardTitle>My Records</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {records.map((r) => (
-                  <MedicalRecordCard
-                    key={r._id}
-                    fileName={r.fileName}
-                    uploadDate={new Date(
-                      r.uploadedAt
-                    ).toLocaleDateString()}
-                    onView={() => setViewRecord(r)}
-                    onDownload={() => window.open(r.url)}
-                  />
-                ))}
+                {records.length > 0 ? (
+                  records.map((r) => (
+                    <MedicalRecordCard
+                      key={r._id}
+                      fileName={r.fileName}
+                      uploadDate={
+                        r.uploadedAt
+                          ? new Date(r.uploadedAt).toLocaleDateString()
+                          : "N/A"
+                      }
+                      onView={() => setViewRecord(r)}
+                      onDownload={() => r.url && window.open(r.url)}
+                    />
+                  ))
+                ) : (
+                  <p className="text-muted-foreground">
+                    No records found
+                  </p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -215,53 +315,91 @@ const PatientDashboard = () => {
                 <CardTitle>My Doctors</CardTitle>
               </CardHeader>
               <CardContent className="grid md:grid-cols-3 gap-4">
-                {doctors.map((doc) => (
-                  <DoctorCard
-                    key={doc._id}
-                    {...doc}
-                    onMessage={
-                      doc.connectionStatus === "connected"
-                        ? () => navigate(`/chat/${doc._id}`)
-                        : undefined
-                    }
-                    onUnfollow={async () => {
-                      await dataService.sendUnfollowRequest(doc._id);
-                      toast.success(
-                        doc.connectionStatus === "pending"
-                          ? "Request cancelled"
-                          : "Unfollowed"
-                      );
+                {doctors.length > 0 ? (
+                  doctors.map((doc) => (
+                    <DoctorCard
+                      key={doc._id}
+                      {...doc}
+                      onMessage={
+                        doc.connectionStatus === "connected"
+                          ? () => navigate(`/chat/${doc._id}`)
+                          : undefined
+                      }
+                      onUnfollow={async () => {
+                        await dataService.sendUnfollowRequest(doc._id);
+                        toast.success("Updated successfully");
+                        refreshDoctors();
+                      }}
+                    />
+                  ))
+                ) : (
+                  <p className="text-muted-foreground">
+                    No doctors connected
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-                      setDoctors((prev) =>
-                        prev.filter((d) => d._id !== doc._id)
-                      );
-                    }}
-                  />
-                ))}
+          <TabsContent value="trust">
+            <Card>
+              <CardHeader>
+                <CardTitle>Trust Layer</CardTitle>
+                <CardDescription>
+                  Who accessed your health data and when
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {auditLoading ? (
+                  <p className="text-muted-foreground">Loading trust logs...</p>
+                ) : auditLogs.length > 0 ? (
+                  auditLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="rounded-lg border p-3 bg-card"
+                    >
+                      <p className="text-sm font-medium">
+                        {log.actorName} ({log.actorRole}) accessed {log.resourceType}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Action: {log.action}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(log.viewedAt).toLocaleString()}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted-foreground">No access logs yet</p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </main>
 
-      {/* 🔔 PATIENT POPUPS */}
-      {notifications.map((n, i) => {
-        if (
-          n.type === "FOLLOW_ACCEPTED" ||
-          n.type === "FOLLOW_DECLINED" ||
-          n.type === "REMOVED_BY_DOCTOR"
-        ) {
-          return (
-            <PatientFollowPopup
-              key={i}
-              type={n.type}
-              doctorName={n.payload.doctorName}
-              onClose={() => removeNotification(i)}
-            />
-          );
-        }
-        return null;
-      })}
+      {/* 🔔 FOLLOW POPUPS */}
+      {popups.map((n) =>
+        n?.type === "MESSAGE_NOTIFICATION" ? (
+          <MessageNotificationPopup
+            key={n.id}
+            senderLabel="New message from doctor"
+            content={n?.payload?.content}
+            onClose={() => removePopup(n.id)}
+          />
+        ) : n?.type === "FOLLOW_ACCEPTED" ||
+        n?.type === "FOLLOW_DECLINED" ||
+        n?.type === "FOLLOW_UNFOLLOWED" ||
+        n?.type === "FOLLOW_REVOKED" ||
+        n?.type === "REMOVED_BY_DOCTOR" ? (
+          <PatientFollowPopup
+            key={n.id}
+            type={n.type}
+            doctorName={resolveDoctorName(n)}
+            onClose={() => removePopup(n.id)}
+          />
+        ) : null
+      )}
 
       <MedicalRecordViewer
         open={!!viewRecord}

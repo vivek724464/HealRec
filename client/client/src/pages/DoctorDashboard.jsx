@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Navigation from "@/components/Navigation";
 import ConnectionRequestCard from "@/components/ConnectionRequestCard";
 import FollowRequestPopup from "@/components/FollowRequestPopup";
+import MessageNotificationPopup from "@/components/MessageNotificationPopup";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -27,25 +28,40 @@ const DoctorDashboard = () => {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const { notifications, removeNotification } = useNotifications();
+  // 🔥 SAFE NOTIFICATIONS EXTRACTION
+  const notificationContext = useNotifications() || {};
+  console.log(notificationContext);
+  const notifications = Array.isArray(notificationContext.notifications)
+    ? notificationContext.notifications
+    : [];
+  const popups = Array.isArray(notificationContext.popups)
+    ? notificationContext.popups
+    : [];
+  const removeNotification =
+    notificationContext.removeNotification || (() => {});
+  const removePopup = notificationContext.removePopup || (() => {});
 
   const user = JSON.parse(localStorage.getItem("user")) || {};
   const doctorId = user?.id || user?._id;
 
-  /* ================= INITIAL LOAD ================= */
+  const refreshRequests = async () => {
+    const reqRes = await dataService.getPendingRequests();
+    const requestsData = reqRes?.data?.data || reqRes?.data || [];
+    setRequests(Array.isArray(requestsData) ? requestsData : []);
+  };
 
+  const refreshPatients = async () => {
+    const patRes = await dataService.getDoctorPatients();
+    const patientsData = patRes?.data?.data || patRes?.data || [];
+    setPatients(Array.isArray(patientsData) ? patientsData : []);
+  };
+
+  /* ================= INITIAL LOAD ================= */
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-
-        const [reqRes, patRes] = await Promise.all([
-          dataService.getPendingRequests(),
-          dataService.getDoctorPatients(),
-        ]);
-
-        setRequests(reqRes?.data || []);
-        setPatients(patRes?.data || []);
+        await Promise.all([refreshRequests(), refreshPatients()]);
       } catch (err) {
         console.error("Dashboard fetch error:", err);
         toast.error("Failed to load dashboard data");
@@ -62,18 +78,7 @@ const DoctorDashboard = () => {
   const handleAccept = async (patientId) => {
     try {
       await dataService.acceptFollowRequest(patientId);
-
-      const accepted = requests.find(
-        (r) => r.patient._id === patientId
-      );
-
-      setRequests((prev) =>
-        prev.filter((r) => r.patient._id !== patientId)
-      );
-
-      if (accepted) {
-        setPatients((prev) => [...prev, accepted]);
-      }
+      await Promise.all([refreshRequests(), refreshPatients()]);
 
       toast.success("Follow request accepted");
     } catch {
@@ -86,7 +91,7 @@ const DoctorDashboard = () => {
       await dataService.declineFollowRequest(patientId);
 
       setRequests((prev) =>
-        prev.filter((r) => r.patient._id !== patientId)
+        prev.filter((r) => r?.patient?._id !== patientId)
       );
 
       toast.error("Follow request declined");
@@ -96,50 +101,49 @@ const DoctorDashboard = () => {
   };
 
   const handleRemovePatient = async (patientId) => {
-  try {
-    await dataService.removePatient(patientId);
+    try {
+      await dataService.removePatient(patientId);
 
-    setPatients((prev) =>
-      prev.filter((p) => (p.patient?._id || p._id) !== patientId)
-    );
+      setPatients((prev) =>
+        prev.filter(
+          (p) => (p?.patient?._id || p?._id) !== patientId
+        )
+      );
 
-    toast.success("Patient removed");
-  } catch (err) {
-    console.error(err);
-    toast.error("Failed to remove patient");
-  }
-};
+      toast.success("Patient removed");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to remove patient");
+    }
+  };
 
-
-  /* ================= REAL-TIME STATE UPDATES ================= */
+  /* ================= REAL-TIME UPDATES ================= */
   useEffect(() => {
+    if (!notifications.length) return;
+
     notifications.forEach((n) => {
-      const patientId = n.payload?.patientId;
+      const { patientId, patientName } = n?.payload || {};
       if (!patientId) return;
 
       if (n.type === "FOLLOW_REQUEST") {
-        setRequests((prev) => [
-          {
-            patient: {
-              _id: patientId,
-              name: n.payload.patientName,
-            },
-            createdAt: new Date(),
-          },
-          ...prev,
-        ]);
+        // Always sync from API for reliable names.
+        refreshRequests().catch((err) =>
+          console.error("refreshRequests error:", err)
+        );
+        removeNotification(n.id);
       }
 
-      if (
-        n.type === "FOLLOW_UNFOLLOWED" ||
-        n.type === "FOLLOW_REVOKED"
-      ) {
-        setPatients((prev) =>
-          prev.filter((p) => p.patient._id !== patientId)
+      if (n.type === "FOLLOW_UNFOLLOWED" || n.type === "FOLLOW_REVOKED") {
+        refreshPatients().catch((err) =>
+          console.error("refreshPatients error:", err)
         );
+        refreshRequests().catch((err) =>
+          console.error("refreshRequests error:", err)
+        );
+        removeNotification(n.id);
       }
     });
-  }, [notifications]);
+  }, [notifications, removeNotification]);
 
   /* ================= STATS ================= */
   const stats = [
@@ -178,8 +182,12 @@ const DoctorDashboard = () => {
             <Card key={s.title}>
               <CardContent className="p-6 flex justify-between items-center">
                 <div>
-                  <p className="text-sm text-muted-foreground">{s.title}</p>
-                  <p className="text-3xl font-bold">{s.value}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {s.title}
+                  </p>
+                  <p className="text-3xl font-bold">
+                    {s.value}
+                  </p>
                 </div>
                 <div
                   className={`w-12 h-12 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center`}
@@ -212,16 +220,20 @@ const DoctorDashboard = () => {
                 ) : (
                   requests.map((r) => (
                     <ConnectionRequestCard
-                      key={r.patient._id}
-                      patientName={r.patient.name}
-                      requestDate={new Date(
-                        r.createdAt
-                      ).toLocaleDateString()}
+                      key={r?.patient?._id}
+                      patientName={r?.patient?.name}
+                      requestDate={
+                        r?.createdAt
+                          ? new Date(
+                              r.createdAt
+                            ).toLocaleDateString()
+                          : "N/A"
+                      }
                       onAccept={() =>
-                        handleAccept(r.patient._id)
+                        handleAccept(r?.patient?._id)
                       }
                       onDecline={() =>
-                        handleDecline(r.patient._id)
+                        handleDecline(r?.patient?._id)
                       }
                     />
                   ))
@@ -240,46 +252,57 @@ const DoctorDashboard = () => {
                 {patients.length === 0 ? (
                   <p>No connected patients</p>
                 ) : (
-                  patients.map(({ patient }) => (
-                    <Card key={patient._id}>
-                      <CardContent className="p-4 flex justify-between items-center">
-                        <div className="flex gap-3 items-center">
-                          <Avatar>
-                            <AvatarFallback>
-                              {patient.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-semibold">
-                            {patient.name}
-                          </span>
-                        </div>
+                  patients.map((item) => {
+                    const patient =
+                      item?.patient || item;
 
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              navigate(`/chat/${patient._id}`)
-                            }
-                          >
-                            Chat
-                          </Button>
+                    if (!patient?._id) return null;
 
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() =>
-                              handleRemovePatient(patient._id)
-                            }
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                    return (
+                      <Card key={patient._id}>
+                        <CardContent className="p-4 flex justify-between items-center">
+                          <div className="flex gap-3 items-center">
+                            <Avatar>
+                              <AvatarFallback>
+                                {patient?.name
+                                  ?.split(" ")
+                                  .map((n) => n[0])
+                                  .join("")}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-semibold">
+                              {patient?.name}
+                            </span>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                navigate(
+                                  `/chat/${patient._id}`
+                                )
+                              }
+                            >
+                              Chat
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() =>
+                                handleRemovePatient(
+                                  patient._id
+                                )
+                              }
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
                 )}
               </CardContent>
             </Card>
@@ -288,16 +311,30 @@ const DoctorDashboard = () => {
       </main>
 
       {/* REAL-TIME POPUPS */}
-      {notifications.map((n, i) => (
-        <FollowRequestPopup
-          key={i}
-          type={n.type}
-          patientName={n.payload?.patientName}
-          onAccept={() => handleAccept(n.payload.patientId)}
-          onDecline={() => handleDecline(n.payload.patientId)}
-          onClose={() => removeNotification(i)}
-        />
-      ))}
+      {popups.length > 0 &&
+        popups.map((n) => (
+          n?.type === "MESSAGE_NOTIFICATION" ? (
+            <MessageNotificationPopup
+              key={n.id}
+              senderLabel="New message from patient"
+              content={n?.payload?.content}
+              onClose={() => removePopup(n.id)}
+            />
+          ) : (
+            <FollowRequestPopup
+              key={n.id}
+              type={n?.type}
+              patientName={n?.payload?.patientName}
+              onAccept={() =>
+                handleAccept(n?.payload?.patientId)
+              }
+              onDecline={() =>
+                handleDecline(n?.payload?.patientId)
+              }
+              onClose={() => removePopup(n.id)}
+            />
+          )
+        ))}
     </div>
   );
 };

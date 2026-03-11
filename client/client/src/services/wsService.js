@@ -1,15 +1,23 @@
 let socket = null;
 
 export const connectWebSocket = ({ token, onMessage, onClose }) => {
-  if (!token) return;
+  if (!token) {
+    console.error("❌ Token is required to connect WebSocket");
+    return;
+  }
 
-  const WS_URL =
-    import.meta.env.VITE_WS_URL || "ws://localhost:5000/ws";
+  const WS_BASE =
+    import.meta.env.VITE_WS_URL || "ws://localhost:7000";
 
-  socket = new WebSocket(`${WS_URL}?token=${token}`);
+  socket = new WebSocket(WS_BASE);
 
   socket.onopen = () => {
     console.log("✅ WebSocket connected");
+    // Send authentication after connection
+    socket.send(JSON.stringify({
+      type: "AUTH",
+      token: token,
+    }));
   };
 
   socket.onmessage = (event) => {
@@ -17,21 +25,21 @@ export const connectWebSocket = ({ token, onMessage, onClose }) => {
       const data = JSON.parse(event.data);
       onMessage?.(data);
     } catch (err) {
-      console.error("WS parse error", err);
+      console.error("❌ WebSocket parse error:", err);
     }
   };
 
-  socket.onclose = () => {
-    console.log("❌ WebSocket disconnected");
+  socket.onclose = (event) => {
+    console.log("❌ WebSocket disconnected", event.code);
     onClose?.();
   };
 
   socket.onerror = (err) => {
-    console.error("WebSocket error", err);
+    console.error("❌ WebSocket error:", err);
   };
 };
 
-export const closeWebSocket = () => {
+export const disconnectWebSocket = () => {
   if (socket) {
     socket.close();
     socket = null;

@@ -1,4 +1,12 @@
 {
+  "name": "healrec-chat-service",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
   "dependencies": {
     "axios": "^1.13.2",
     "cors": "^2.8.5",
@@ -8,5 +16,8 @@
     "mongoose": "^8.19.4",
     "uuid": "^13.0.0",
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
   }
 }

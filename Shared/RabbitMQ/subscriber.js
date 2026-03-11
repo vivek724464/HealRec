@@ -2,14 +2,14 @@ const { initRabbitMQ } = require("./index");
 const { EXCHANGE_NAME } = require("./events");
 
 async function subscribe(rabbitUrl, queueName, routingKeys = [], onMessage) {
-  if (!rabbitUrl){
-    console.log("rabbitUrl is required");
+  if (!rabbitUrl) {
+    throw new Error("❌ rabbitUrl is required");
   }
-  if (!queueName){
-    console.log("queueName is required")
-  };
-  if (typeof onMessage !== "function"){
-    console.log("onMessage must be a function");
+  if (!queueName) {
+    throw new Error("❌ queueName is required");
+  }
+  if (typeof onMessage !== "function") {
+    throw new Error("❌ onMessage must be a function");
   }
 
   const { channel } = await initRabbitMQ(rabbitUrl);
@@ -19,7 +19,7 @@ async function subscribe(rabbitUrl, queueName, routingKeys = [], onMessage) {
     routingKeys = Object.values(routingKeys);
   }
   if (!Array.isArray(routingKeys)) {
-    console.log("routingKeys must be array/string/object");
+    throw new Error("❌ routingKeys must be array/string/object");
   }
   await channel.assertQueue(queueName, { durable: true });
   for (const key of routingKeys) {
@@ -35,12 +35,14 @@ async function subscribe(rabbitUrl, queueName, routingKeys = [], onMessage) {
         await onMessage(content, routingKey, msg);
         channel.ack(msg);
       } catch (err) {
-        console.log("Error in subscriber onMessage:", err);
-              try {
+        console.error("❌ Error in subscriber onMessage:", err);
+        try {
           channel.nack(msg, false, false);
         } catch (e) {
-          console.log("Failed to nack message:", e);
-          try { channel.ack(msg); } catch(_) {}
+          console.error("Failed to nack message:", e);
+          try {
+            channel.ack(msg);
+          } catch (_) {}
         }
       }
     },

@@ -6,6 +6,13 @@ const clients = new Map(); // userId -> ws
 
 function initWebSocket(server) {
   const wss = new WebSocket.Server({ server });
+  wss.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error("WebSocket failed to bind: port is already in use.");
+    } else {
+      console.error("WebSocket server error:", err);
+    }
+  });
 
   wss.on("connection", (ws) => {
     ws.on("message", async (message) => {

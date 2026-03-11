@@ -1,6 +1,15 @@
 # HealRec
 
-**Backend Project for HealRec** — a health-record management API with user authentication, report uploads (Cloudinary), doctor–patient follow relationships, notifications, and WebSocket support.
+**A comprehensive healthcare platform** for secure medical record management with real-time messaging, doctor-patient follow relationships, and notifications.
+
+---
+
+## ⚠️ Important: Read Before Getting Started
+
+This project has been **fully refactored and fixed** for production readiness. Please read:
+- **[STARTUP_GUIDE.md](STARTUP_GUIDE.md)** - Complete setup and deployment guide
+- **[FIXES_SUMMARY.md](FIXES_SUMMARY.md)** - All critical issues that were fixed
+- **[quick-start.bat](quick-start.bat)** - Windows setup script (or [quick-start.sh](quick-start.sh) for Linux/Mac)
 
 ---
 
@@ -10,266 +19,489 @@
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Quick Start](#quick-start)
+- [Project Architecture](#project-architecture)
 - [Environment Variables](#environment-variables)
-- [Run (Dev / Prod)](#run-dev--prod)
+- [Running the Application](#running-the-application)
 - [API Overview](#api-overview)
-  - [Authentication & Users](#authentication--users)
-  - [Reports](#reports)
-  - [Followers / Follow Requests](#followers--follow-requests)
-  - [Doctor Routes](#doctor-routes)
-  - [Patient Routes](#patient-routes)
-  - [Notifications](#notifications)
-  - [Health Check](#health-check)
 - [WebSocket](#websocket)
-- [Project Structure](#project-structure)
-- [Troubleshooting & Notes](#troubleshooting--notes)
+- [Critical Fixes Applied](#critical-fixes-applied)
+- [Common Issues](#common-issues)
 - [Examples](#examples)
+- [Contributing](#contributing)
 
 ---
 
 ## About
 
-HealRec is an **Express.js REST API** that provides:
+HealRec is a **full-stack healthcare management platform** with:
 
-- Secure user authentication
-- Patient & doctor profile management with OTP verification
-- Patient → doctor follow/accept flows
-- Report uploads using Cloudinary
-- Notifications system
-- WebSocket integration for real-time features
+- **REST API** (Node.js + Express) - Port 5000
+- **WebSocket Server** (Real-time messaging) - Port 7000
+- **React Frontend** (SPA with Vite) - Port 5173
+- **RabbitMQ Integration** (Event-driven microservices)
+- **MongoDB Database** (Document storage)
+- **Cloudinary Integration** (Secure file storage)
+
+Perfect for telemedicine platforms, health clinics, and patient-doctor communication systems.
 
 ---
 
 ## Features
 
-- Email/OTP-based signup & login
+✅ **User Management**
+- Email/OTP-based signup & login (Email + SMS)
 - Password reset flow
-- Patient → Doctor follow requests (accept / decline / unfollow)
-- Upload patient reports to Cloudinary
-- Doctor & patient profile updates with OTP verification
-- Notifications listing
-- Health check endpoint
-- WebSocket server for real-time functionality
+- Doctor & patient profile management
+- Role-based access control
+
+✅ **Doctor-Patient Relationships**
+- Patient → Doctor follow requests
+- Doctor accept/decline/remove functionality
+- Relationship status tracking (pending, accepted, declined)
+
+✅ **Medical Records**
+- Upload and store patient medical reports
+- Cloudinary cloud storage integration
+- Secure access control & sharing
+
+✅ **Real-Time Messaging**
+- WebSocket-based instant messaging
+- Message history retrieval
+- Online/offline status
+- Read/unread tracking
+
+✅ **Notifications**
+- Real-time notifications via WebSocket
+- Persistent notification history
+- Event-based triggers
+- Read/unread status management
+
+✅ **Inter-Service Communication**
+- RabbitMQ event bus
+- Asynchronous event publishing
+- Service decoupling & scalability
 
 ---
 
 ## Tech Stack
 
-- **Node.js + Express**
-- **MongoDB** (via `connectDB`)
-- **Cloudinary** (via `multer-storage-cloudinary`)
-- **WebSockets** (custom `wsServer`)
-- **CORS** configured for frontend origins
+### Backend
+- **Node.js** + **Express.js**
+- **MongoDB** + **Mongoose**
+- **WebSocket (ws)**
+- **RabbitMQ (amqplib)**
+- **JWT** - Authentication
+- **Bcrypt** - Password hashing
+- **Cloudinary** - Cloud storage
+- **Nodemailer** + **Twilio** - Notifications
+- **Redis** - Caching (optional)
+
+### Frontend
+- **React 18**
+- **Vite** - Build tool
+- **React Router**
+- **TanStack React Query**
+- **Axios**
+- **Shadcn/UI** + **Tailwind CSS**
 
 ---
 
 ## Quick Start
 
-```bash
-# Clone the repository
-git clone https://github.com/vivek724464/HealRec.git
+### Option 1: Automated Setup (Recommended)
 
-# Move into API directory
-cd HealRec/healrec-API
-
-# Install dependencies
-npm install
+**Windows:**
+```cmd
+quick-start.bat
 ```
-Add environment variables (see below), then start the server:
 
-# Development
+**Linux/Mac:**
+```bash
+bash quick-start.sh
+```
+
+### Option 2: Manual Setup
+
+```bash
+# 1. Clone repository
+git clone <repo>
+cd HealRec
+
+# 2. Ensure environment files exist with proper configuration
+#    - healrec-API/.env
+#    - ChatService/.env
+
+# 3. Start MongoDB & RabbitMQ (Docker)
+docker run -d -p 27017:27017 --name mongodb mongo:latest
+docker run -d -p 5672:5672 -p 15672:15672 --name rabbitmq \
+  rabbitmq:3.12-management
+
+# 4. See "Running the Application" section below
+```
+
+---
+
+## Project Architecture
+
+```
+HealRec/
+├── healrec-API/              # REST API (Port 5000)
+│   ├── src/
+│   │   ├── config/
+│   │   ├── controllers/
+│   │   ├── middleware/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── utils/
+│   │   ├── websocket/
+│   │   └── server.js
+│   ├── .env                  # Configuration (keep this)
+│   └── package.json
+│
+├── ChatService/              # WebSocket Server (Port 7000)
+│   ├── src/
+│   │   ├── config/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── ws/
+│   │   └── server.js
+│   ├── .env                  # Configuration (keep this)
+│   └── package.json
+│
+├── client/client/            # React Frontend (Port 5173)
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── context/
+│   │   └── App.jsx
+│   └── package.json
+│
+├── Shared/                   # RabbitMQ utilities
+│   └── RabbitMQ/
+│
+├── STARTUP_GUIDE.md
+├── FIXES_SUMMARY.md
+├── quick-start.sh/.bat
+└── README.md
+```
+
+---
+
+## Environment Variables
+
+### healrec-API/.env
+
+```env
+PORT=5000
+NODE_ENV=development
+MONGO_URI=mongodb://localhost:27017/healrec
+JWT_SECRET=your_super_secret_key_min_32_chars
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+FRONTEND_URL=http://localhost:5173
+
+CLOUDINARY_NAME=your_cloudinary_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_app_password
+
+TWILIO_ACCOUNT_SID=your_sid
+TWILIO_AUTH_TOKEN=your_token
+TWILIO_PHONE_NUMBER=+1234567890
+```
+
+### ChatService/.env
+
+```env
+PORT=7000
+NODE_ENV=development
+MONGO_URI=mongodb://localhost:27017/healrec
+JWT_SECRET=same_as_healrec_api
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+FRONTEND_URL=http://localhost:5173
+```
+
+### client/client/.env
+
+```env
+# URL of the REST API
+VITE_HEALREC_API_URL=http://localhost:5000/HealRec
+# WebSocket endpoint – must point to ChatService (default port 7000)
+VITE_WS_URL=ws://localhost:7000
+```
+
+Ensure all `.env` files are properly configured with your credentials.
+
+---
+
+## Running the Application
+
+### Prerequisites
+- Node.js v16+
+- MongoDB running
+- RabbitMQ running
+- Environment variables configured
+
+### Terminal 1: HealRec API
+```bash
+cd healrec-API
+npm install
 npm run dev
+# Server at http://localhost:5000
+```
 
-# Production
-npm start
-or
-node src/server.js
+### Terminal 2: ChatService
+```bash
+cd ChatService
+npm install
+npm run dev
+# Chat at http://localhost:7000
+```
 
-Visit:
+### Terminal 3: Frontend
+```bash
+cd client/client
+npm install
+npm run dev
+# Frontend at http://localhost:5173
+```
 
-GET / → Welcome to HealRec API
+### Verify Everything Works
+```bash
+curl http://localhost:5000/HealRec/health
+# Response: { "status": "UP" }
+```
 
-GET /HealRec/health → { "status": "UP" }
+---
 
-# Environment Variables
+## API Overview
 
-Create a .env file at healrec-API/.env:
+### Base URL: `http://localhost:5000/HealRec`
 
-- PORT=5000
-- MONGO_URI=<your_mongodb_connection_string>
-- FRONTEND_URL=http://localhost:5173
-- JWT_SECRET=<your_jwt_secret>
-- CLOUDINARY_CLOUD_NAME=<cloud_name>
-- CLOUDINARY_API_KEY=<api_key>
-- CLOUDINARY_API_SECRET=<api_secret>
+### Authentication Endpoints (`/users`)
 
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/signup` | ❌ | Start OTP signup |
+| POST | `/verify-otp` | ❌ | Complete signup |
+| POST | `/login` | ❌ | Login user |
+| POST | `/forget-password` | ❌ | Request password reset |
+| POST | `/reset-password` | ❌ | Reset password |
+| GET | `/search?q=name` | ✅ | Search users |
 
-Check src/config and .env.example (if present) for additional required variables.
+### Reports Endpoints (`/reports`)
 
-# Run (Dev / Prod)
+| Method | Path | Auth | Role | Description |
+|--------|------|------|------|-------------|
+| POST | `/uploadReport` | ✅ | Patient | Upload report |
+| GET | `/:patientId` | ✅ | Patient | Get reports |
+| GET | `/shared-with-me` | ✅ | Doctor | Get shared reports |
 
-Development: npm run dev (nodemon)
+### Follow Endpoints (`/followers`)
 
-Production: npm start or node src/server.js
+| Method | Path | Auth | Role | Description |
+|--------|------|------|------|-------------|
+| POST | `/follow-request` | ✅ | Patient | Send request |
+| POST | `/accept-request` | ✅ | Doctor | Accept request |
+| POST | `/decline-request` | ✅ | Doctor | Decline request |
+| POST | `/unfollow-request` | ✅ | Patient | Unfollow doctor |
+| POST | `/remove-patient` | ✅ | Doctor | Remove patient |
+| GET | `/get-Pending-requests` | ✅ | Doctor | Get pending |
+| GET | `/get-followed-doctors` | ✅ | Patient | Get followed |
+| GET | `/get-followers` | ✅ | Doctor | Get followers |
 
-The server creates an HTTP server and initializes WebSocket support via:
+### Doctor Endpoints (`/doctor`)
 
-initWebSocket(server);
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/me` | ✅ | Get profile |
+| PUT | `/update-profile` | ✅ | Update profile |
+| POST | `/update-profile/verify-otp` | ✅ | Verify OTP |
 
+### Patient Endpoints (`/patient`)
 
-Default port: process.env.PORT || 5000
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/me` | ✅ | Get profile |
+| PUT | `/update-profile` | ✅ | Update profile |
+| POST | `/update-profile/verify-otp` | ✅ | Verify OTP |
+| GET | `/search-doctors?q=name` | ✅ | Search doctors |
 
-# API Overview
+### Notifications Endpoints (`/notifications`)
 
-Base path: /HealRec
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/` | ✅ | Get notifications |
 
-# Authentication & Users
+### Health Endpoint (`/health`)
 
-src/routes/userRoutes.js
+```bash
+curl http://localhost:5000/HealRec/health
+# Response: { "status": "UP" }
+```
 
-- POST /HealRec/users/signup
-- POST /HealRec/users/verify-otp
-- POST /HealRec/users/login
-- POST /HealRec/users/forget-password
-- GET  /HealRec/users/reset-password
-- POST /HealRec/users/reset-password
-- GET  /HealRec/users/search        (protected)
-
-# Reports
-
-src/routes/reportRoutes.js
-
-- POST /HealRec/reports/uploadReport
-- GET  /HealRec/reports/:patientId
-- GET  /HealRec/reports/shared-with-me
-
-
-Protected by isLoggedIn
-
-Upload uses multipart/form-data
-
-Field name: report
-
-Stored in Cloudinary
-
-## Followers / Follow Requests
-
-src/routes/followRoutes.js
-
-- POST /HealRec/followers/follow-request
-- POST /HealRec/followers/accept-request
-- POST /HealRec/followers/decline-request
-- POST /HealRec/followers/unfollow-request
-- POST /HealRec/followers/remove-patient
-- GET  /HealRec/followers/get-Pending-requests
-- GET  /HealRec/followers/get-followed-doctors
-- GET  /HealRec/followers/get-followers
-
-## Doctor Routes
-
-src/routes/docRoutes.js
-
-- PUT /HealRec/doctor/update-profile
-- POST /HealRec/doctor/update-profile/verify-otp
-- GET /HealRec/doctor/me
-
-## Patient Routes
-
-src/routes/patientRoutes.js
-
-- PUT /HealRec/patient/update-profile
-- POST /HealRec/patient/update-profile/verify-otp
-- GET /HealRec/patient/search-doctors
-
-## Notifications
-
-src/routes/notificationRoutes.js
-
-- GET /HealRec/notifications/
-
-
-Returns notifications sorted by newest first
-
-## Health Check
-- GET /HealRec/health
-
-
-Response:
-
-{ "status": "UP" }
+---
 
 ## WebSocket
 
-Initialized in src/server.js
+### Connection
 
-Uses initWebSocket(server)
+**Endpoint:** `ws://localhost:7000`
 
-## Logs:
+```javascript
+const token = localStorage.getItem('token');
+const ws = new WebSocket('ws://localhost:7000');
 
-Server + WebSocket running on port <PORT>
-
-
-### Check implementation in:
-
-src/websocket/
-  wsServer.js
-
-# Project Structure
-```bash
-healrec-API/
-│
-├── src/
-│   ├── config/        # DB, Cloudinary, env configs
-│   ├── controllers/  # Business logic
-│   ├── middleware/   # Auth & role-based middleware
-│   ├── models/       # Mongoose schemas
-│   ├── routes/       # API routes
-│   ├── utils/
-│   ├── websocket/    # WebSocket server
-│   └── server.js     # App bootstrap
-│
-├── public/
-│   └── resetPassword.html
-│
-├── package.json
-└── .env
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    type: "AUTH",
+    token: token
+  }));
+};
 ```
-# Contributing
 
-Open an issue describing the bug or feature.
+### Client → Server Events
 
-Fork the repo and create a feature branch.
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `join_chat` | `{ with: "userId" }` | Start chatting |
+| `leave_chat` | `{}` | Stop chatting |
+| `message` | `{ receiverId: "...", content: "..." }` | Send message |
+| `history` | `{ with: "userId" }` | Get history |
 
-Implement changes and open a PR.
+### Server → Client Events
 
-Add tests if applicable.
+| Event | Description |
+|-------|-------------|
+| `info` | Auth success response |
+| `message` | Incoming message |
+| `notification` | Message notification |
+| `sent` | Sent confirmation |
+| `history` | Message history |
+| `follow_notification` | Follow event (payload.event may be `FOLLOW_REQUEST`, `FOLLOW_ACCEPTED`, `FOLLOW_UNFOLLOWED`, `FOLLOW_REVOKED`) |
+| `error` | Error response |
 
-Update README and .env.example if needed.
+---
 
-# Troubleshooting & Notes
+## Critical Fixes Applied
 
-Ensure MongoDB is reachable via MONGO_URI
+✅ **CORS Configuration** - Multiple origin support
+✅ **Token Security** - Authorization header (not URL params)
+✅ **RabbitMQ Validation** - Required environment variable✅ **Real-time follow requests** - Doctor dashboards now update instantly when a patient sends a request✅ **AllowedPair Cleanup** - Delete on unfollow/revoke
+✅ **Error Handling** - Proper validation & throwing
+✅ **WebSocket Security** - Secure authentication
+✅ **ID Handling** - Proper MongoDB ObjectId conversion
+✅ **Logging** - Clear debugging indicators
 
-Verify Cloudinary credentials for file uploads
+**[See FIXES_SUMMARY.md for detailed information](FIXES_SUMMARY.md)**
 
-Update CORS origins in server.js if frontend URL changes
+---
 
-Check multer + CloudinaryStorage configuration for upload issues
+## Common Issues & Solutions
 
-Server has a global error handler that returns err.message
+### CORS Error
+```
+Solution: Check FRONTEND_URL in .env matches your frontend origin
+```
 
+### "Missing RABBITMQ_URL"
+```
+Solution: Add to .env
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+```
 
-# Examples
-## Health Check
-curl http://localhost:5000/HealRec/health
+### MongoDB Connection Refused
+```
+Solution: docker run -d -p 27017:27017 --name mongodb mongo:latest
+```
 
-## Login
-curl -X POST http://localhost:5000/HealRec/users/login \
--H "Content-Type: application/json" \
--d '{"username":"<username>","password":"<password>"}'
+### WebSocket Connection Failed
+```
+Solution: Ensure ChatService is running and token is valid
+```
 
-## Upload Report
+---
+
+## Examples
+
+### Signup Flow
+```bash
+# Request OTP
+curl -X POST http://localhost:5000/HealRec/users/signup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "role": "patient",
+    "username": "john_doe",
+    "email": "john@example.com",
+    "password": "Pass123!",
+    "name": "John Doe",
+    "signupMethod": "email"
+  }'
+
+# Verify OTP (check email for code)
+curl -X POST http://localhost:5000/HealRec/users/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "...",
+    "otp": "123456"
+  }'
+```
+
+### Follow Doctor
+```bash
+# Patient sends request
+curl -X POST http://localhost:5000/HealRec/followers/follow-request \
+  -H "Authorization: Bearer <token>" \
+  -d '{"doctorId": "..."}'
+
+# Doctor accepts
+curl -X POST http://localhost:5000/HealRec/followers/accept-request \
+  -H "Authorization: Bearer <token>" \
+  -d '{"patientId": "..."}'
+```
+
+### Upload Report
+```bash
 curl -X POST http://localhost:5000/HealRec/reports/uploadReport \
--H "Authorization: Bearer <token>" \
--F "report=@/path/to/file.pdf"
+  -H "Authorization: Bearer <token>" \
+  -F "report=@file.pdf"
+```
 
+---
+
+## Contributing
+
+1. Create issue describing bug/feature
+2. Fork repository
+3. Create `feature/your-feature` branch
+4. Make changes and test locally
+5. Submit pull request
+
+---
+
+## Support & Documentation
+
+- [STARTUP_GUIDE.md](STARTUP_GUIDE.md) - Complete setup guide
+- [FIXES_SUMMARY.md](FIXES_SUMMARY.md) - All fixes applied
+- [quick-start.bat](quick-start.bat) / [quick-start.sh](quick-start.sh) - Automated setup
+
+---
+
+## License
+
+ISC
+
+---
+
+## Authors
+
+- **Vivek** - Backend Development
+- **Saloni** - Backend Features
+
+---
+
+**Built with ❤️ for healthcare**

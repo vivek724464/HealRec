@@ -164,7 +164,6 @@ const verifyRegisterOtp = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { username, password } = req.body;
-    console.log(username,password);
     if (!username || !password) {
       return res.status(400).json({
         success: false,
@@ -172,10 +171,9 @@ const login = async (req, res) => {
       });
     }
      const cleanUsername = username.toLowerCase().trim();
-    const user =
+     const user =
       (await Doctor.findOne({ username: cleanUsername })) ||
       (await Patient.findOne({ username: cleanUsername }));
-      console.log(user);
 
     if (!user) {
       return res.status(404).json({
@@ -243,7 +241,7 @@ const forgotPassword = async (req, res) => {
       user.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
       await user.save();
 
-      const resetUrl = `http://localhost:${process.env.PORT}/HealRec/reset-password/${resetToken}`;
+      const resetUrl = `http://localhost:${process.env.PORT}/HealRec/users/reset-password/${resetToken}`;
 
       await sendMail(
         user.email,

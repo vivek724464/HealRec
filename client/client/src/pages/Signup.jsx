@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,8 @@ const Signup = () => {
   const [identifier, setIdentifier] = useState("");
   const [otp, setOtp] = useState("");
   const [createdUsername, setCreatedUsername] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // ✅ NEW
+
   const [formData, setFormData] = useState({
     name: "",
     identifier: "",
@@ -74,29 +77,11 @@ const Signup = () => {
       if (response?.success) {
         toast.success("Account created successfully!");
 
-        // Persist token if provided
         if (response?.token) {
-          localStorage.setItem("token", response.token);
+          authService.setSession(response.token);
         }
 
-        // Try to get username from response or from decoded token
-        let username = response?.username || "";
-        if (!username && response?.token) {
-          try {
-            const base64Url = response.token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-            const user = JSON.parse(jsonPayload);
-            localStorage.setItem("user", JSON.stringify(user));
-            username = user.username || user.name || username;
-          } catch (err) {
-            // decoding failed, continue without decoded username
-          }
-        }
-
-        setCreatedUsername(username || formData.identifier);
+        setCreatedUsername(response?.username || formData.identifier);
         setStep(3);
       } else {
         toast.error(response?.message || "Invalid OTP");
@@ -120,15 +105,17 @@ const Signup = () => {
             Join our healthcare community today
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           {step === 1 ? (
             <form onSubmit={handleRequestOtp} className="space-y-4">
+
+              {/* Role Selection */}
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
                   variant={role === "patient" ? "default" : "outline"}
                   onClick={() => setRole("patient")}
-                  className="transition-all"
                   disabled={loading}
                 >
                   Patient
@@ -137,13 +124,13 @@ const Signup = () => {
                   type="button"
                   variant={role === "doctor" ? "default" : "outline"}
                   onClick={() => setRole("doctor")}
-                  className="transition-all"
                   disabled={loading}
                 >
                   Doctor
                 </Button>
               </div>
 
+              {/* Full Name */}
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
                 <Input
@@ -159,6 +146,7 @@ const Signup = () => {
                 />
               </div>
 
+              {/* Email / Phone */}
               <div className="space-y-2">
                 <Label htmlFor="identifier">Email or Phone</Label>
                 <Input
@@ -174,19 +162,32 @@ const Signup = () => {
                 />
               </div>
 
-              <div className="space-y-2">
+              {/* Password with Toggle */}
+              <div className="space-y-2 relative">
                 <Label htmlFor="password">Password</Label>
+
                 <Input
                   id="password"
-                  type="password"
-                  placeholder=""
+                  type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
                   required
                   disabled={loading}
+                  className="pr-10"
                 />
+
+                <div
+                  className="absolute right-3 top-9 cursor-pointer text-muted-foreground hover:text-primary"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )}
+                </div>
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>
@@ -195,10 +196,7 @@ const Signup = () => {
 
               <p className="text-sm text-center text-muted-foreground">
                 Already have an account?{" "}
-                <Link
-                  to="/login"
-                  className="text-primary hover:underline font-medium"
-                >
+                <Link to="/login" className="text-primary hover:underline font-medium">
                   Login
                 </Link>
               </p>
@@ -242,26 +240,9 @@ const Signup = () => {
                 Your username is
                 <span className="font-medium ml-2">{createdUsername}</span>
               </p>
-              <div className="space-y-2">
-                <Button
-                  onClick={() => {
-                    try {
-                      const user = JSON.parse(localStorage.getItem("user") || "{}");
-                      if (user?.role) {
-                        navigate(user.role === "doctor" ? "/doctor-dashboard" : "/patient-dashboard");
-                        return;
-                      }
-                    } catch (err) {
-                      // ignore
-                    }
-                    // fallback to login
-                    navigate("/login");
-                  }}
-                  className="w-full"
-                >
-                  Continue
-                </Button>
-              </div>
+              <Button onClick={() => navigate("/login")} className="w-full">
+                Continue
+              </Button>
             </div>
           )}
         </CardContent>

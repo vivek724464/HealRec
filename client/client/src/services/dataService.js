@@ -109,7 +109,7 @@ getSharedRecords: async () => {
     return res.data;
   },
     getPatientProfile: async () => {
-    const res = await api.get("/patient/profile");
+    const res = await api.get("/patient/me");
     return res.data.user;
   },
 
@@ -122,6 +122,14 @@ getSharedRecords: async () => {
   verifyPatientProfileOtp: async (otp) => {
     const res = await api.post("/patient/update-profile/verify-otp", { otp });
     return res.data;
+  },
+
+  getAuditLogs: async (page = 1, limit = 50) => {
+    const res = await api.get(`/patient/audit-logs?page=${page}&limit=${limit}`);
+    return {
+      data: res.data.logs || [],
+      pagination: res.data.pagination || null,
+    };
   },
 
 };

@@ -133,7 +133,7 @@ const updateDoctorProfileOtpRequest = async (req, res) => {
 };
 
 const verifyDoctorProfileOtp = async (req, res) => {
-  const doctorId = req.user.id;
+  const doctorId = req.user._id;
   const { otp } = req.body;
 
   if (!otp) {

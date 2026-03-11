@@ -26,10 +26,9 @@ router.post(
   uploadReport
 );
 
-router.get("/:patientId", isLoggedIn, isPatient, getReports);
-
 router.get("/shared-with-me", isLoggedIn, isDoctor, (req, res) => {
   return res.json({ records: [] });
 });
+router.get("/:patientId", isLoggedIn, getReports);
 
 module.exports = router;
